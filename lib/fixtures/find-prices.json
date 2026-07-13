@@ -1,0 +1,21 @@
+{
+  "results": [
+    {
+      "retailer": "snowleader.com",
+      "price": 67.9,
+      "currency": "EUR",
+      "url": "https://www.snowleader.com/aero-lite-BLIC00071.html",
+      "in_stock": true,
+      "size_matched": true
+    },
+    {
+      "retailer": "glisshop.com",
+      "currency": "EUR",
+      "url": "https://www.glisshop.com/broches-a-glace/blue-ice/aero-lite54898534",
+      "in_stock": false,
+      "size_matched": true
+    }
+  ],
+  "searched_at": "2026-07-13T08:06:10.435Z",
+  "domains_failed": []
+}

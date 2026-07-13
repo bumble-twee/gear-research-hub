@@ -1,5 +1,7 @@
 // The enrichment agent's system prompt. Version it like code.
 
+import { z } from "zod";
+
 export const ENRICHMENT_SYSTEM_PROMPT = `You are the enrichment agent for a personal outdoor gear research tool.
 The user has already chosen candidate products to research. Your job is
 to gather accurate, verifiable data about each candidate. You do not
@@ -75,3 +77,78 @@ Return only valid JSON matching this shape, no prose:
   ],
   "run_notes": []
 }`;
+
+// Mirrors FindPricesResult / AggregateReviewsResult from ../agent/tools.
+// Kept separate because zod schemas can't be derived from those
+// interfaces directly.
+const FindPricesResultSchema = z.object({
+  results: z.array(
+    z.object({
+      retailer: z.string(),
+      price: z.number().optional(),
+      currency: z.string(),
+      url: z.string(),
+      in_stock: z.boolean(),
+      size_matched: z.boolean(),
+    })
+  ),
+  searched_at: z.string(),
+  domains_failed: z.array(z.string()),
+});
+
+const AggregateReviewsResultSchema = z.object({
+  summary: z.string(),
+  review_links: z.array(
+    z.object({
+      site: z.string(),
+      url: z.string(),
+      rating: z.string().nullable(),
+      key_takeaway: z.string(),
+    })
+  ),
+  reviews_found: z.number(),
+  domains_failed: z.array(z.string()),
+});
+
+// Validates the enrichment agent's final JSON against the shape
+// documented above. A run that fails this must be rejected wholesale,
+// not partially written.
+export const EnrichmentOutputSchema = z.object({
+  candidates: z.array(
+    z.object({
+      input_name: z.string(),
+      resolved: z.object({
+        brand: z.string(),
+        name: z.string(),
+        brand_url: z.string(),
+        image_url: z.string().nullable(),
+      }),
+      specs: z.object({
+        weight_grams: z.number().nullable(),
+        size: z.string(),
+        gender: z.string(),
+        features: z.record(z.string(), z.unknown()),
+      }),
+      requirement_violations: z.array(
+        z.object({
+          field: z.string(),
+          required: z.string(),
+          actual: z.string(),
+          source: z.string(),
+        })
+      ),
+      ambiguities: z.array(z.string()),
+      needs_verification: z.array(
+        z.object({
+          field: z.string(),
+          note: z.string(),
+        })
+      ),
+      price_result: FindPricesResultSchema,
+      review_result: AggregateReviewsResultSchema,
+    })
+  ),
+  run_notes: z.array(z.string()),
+});
+
+export type EnrichmentOutput = z.infer<typeof EnrichmentOutputSchema>;

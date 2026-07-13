@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { writeReviewSnapshot } from "@/lib/db/writeSnapshotAndCache";
 import type { AggregateReviewsResult } from "@/lib/agent/tools";
+import mockAggregateReviews from "@/lib/fixtures/aggregate-reviews.json";
 
 const anthropic = new Anthropic();
 
@@ -11,22 +12,28 @@ export async function POST(req: NextRequest) {
   const { brand, item_name, review_domains, focus_criteria, candidateId } =
     await req.json();
 
-  const focusClause =
-    focus_criteria && focus_criteria.length > 0
-      ? ` Weight the summary toward what matters most to this user: ${focus_criteria.join(
-          ", "
-        )}. Call out how the product performs on each of these specifically, not just general impressions.`
-      : "";
+  let parsed: AggregateReviewsResult;
 
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4096,
-    messages: [
-      {
-        role: "user",
-        content: `Find reviews for ${brand} ${item_name} on each review domain: ${review_domains.join(
-          ", "
-        )}.
+  if (process.env.MOCK_TOOLS === "true") {
+    console.log("MOCK MODE");
+    parsed = mockAggregateReviews as AggregateReviewsResult;
+  } else {
+    const focusClause =
+      focus_criteria && focus_criteria.length > 0
+        ? ` Weight the summary toward what matters most to this user: ${focus_criteria.join(
+            ", "
+          )}. Call out how the product performs on each of these specifically, not just general impressions.`
+        : "";
+
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 4096,
+      messages: [
+        {
+          role: "user",
+          content: `Find reviews for ${brand} ${item_name} on each review domain: ${review_domains.join(
+            ", "
+          )}.
 
 Search every listed domain.${focusClause} Write a synthesized summary (a few sentences) of what reviewers say, not a list of separate per-site summaries. Output your final answer as JSON wrapped in <answer></answer> tags, with no other text inside the tags.
 
@@ -39,50 +46,46 @@ Rules:
 - reviews_found is the count of distinct reviews/sources that contributed to the summary, not the count of review_links entries.
 - site must be the domain.
 - If no reviews are found on any site, summary should say so plainly and review_links should be empty.`,
-      },
-    ],
-    tools: [
-      {
-        type: "web_search_20250305",
-        name: "web_search",
-        allowed_domains: review_domains,
-        allowed_callers: ["direct"],
-        max_uses: Math.max(review_domains.length, 1),
-      },
-    ],
-  });
+        },
+      ],
+      tools: [
+        {
+          type: "web_search_20250305",
+          name: "web_search",
+          allowed_domains: review_domains,
+          allowed_callers: ["direct"],
+          max_uses: Math.max(review_domains.length, 1),
+        },
+      ],
+    });
 
-  console.log(JSON.stringify(response.content, null, 2));
+    console.log(JSON.stringify(response.content, null, 2));
 
-  const textBlock = response.content.find((b) => b.type === "text");
-  const text = textBlock?.type === "text" ? textBlock.text : "";
+    const textBlock = response.content.find((b) => b.type === "text");
+    const text = textBlock?.type === "text" ? textBlock.text : "";
 
-  const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/);
-  if (!answerMatch) {
-    console.log(text);
-    const result: AggregateReviewsResult = {
-      summary: "",
-      review_links: [],
-      reviews_found: 0,
-      domains_failed: review_domains,
-    };
-    if (candidateId) {
-      await writeReviewSnapshot(candidateId, result);
+    const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/);
+    if (!answerMatch) {
+      console.log(text);
+      parsed = {
+        summary: "",
+        review_links: [],
+        reviews_found: 0,
+        domains_failed: review_domains,
+      };
+    } else {
+      try {
+        parsed = JSON.parse(answerMatch[1].trim()) as AggregateReviewsResult;
+      } catch (error) {
+        console.error(error);
+        parsed = {
+          summary: "",
+          review_links: [],
+          reviews_found: 0,
+          domains_failed: [],
+        };
+      }
     }
-    return NextResponse.json(result);
-  }
-
-  let parsed: AggregateReviewsResult;
-  try {
-    parsed = JSON.parse(answerMatch[1].trim()) as AggregateReviewsResult;
-  } catch (error) {
-    console.error(error);
-    parsed = {
-      summary: "",
-      review_links: [],
-      reviews_found: 0,
-      domains_failed: [],
-    };
   }
 
   const domainHasResult = (domain: string) =>
