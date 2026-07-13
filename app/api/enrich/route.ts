@@ -26,7 +26,19 @@ const supabase = createClient(
 // The agent's own tool_use loop (find_prices / aggregate_reviews), not
 // to be confused with the server-side web_search pause_turn loop that
 // lives inside those two tool routes.
-const MAX_TURNS = 20;
+const MAX_TURNS = 15;
+
+// runAgentLoop never throws for an aborted run — it reports the abort
+// so the caller can respond without touching the database. Only a
+// successful run reaches candidate validation and writes.
+type AgentLoopResult =
+  | { ok: true; output: unknown }
+  | {
+      ok: false;
+      reason: "max_iterations" | "api_error";
+      error: string;
+      completed: string[];
+    };
 
 export async function POST(req: NextRequest) {
   const { searchId, candidateNames } = await req.json();
@@ -36,7 +48,21 @@ export async function POST(req: NextRequest) {
     console.log("MOCK MODE");
     output = mockEnrichAnswer;
   } else {
-    output = await runAgentLoop(req, searchId, candidateNames);
+    const loopResult = await runAgentLoop(req, searchId, candidateNames);
+    if (!loopResult.ok) {
+      console.error(`Agent loop aborted (${loopResult.reason}):`, loopResult.error);
+      return NextResponse.json(
+        {
+          status: "aborted",
+          searchId,
+          reason: loopResult.reason,
+          error: loopResult.error,
+          completed: loopResult.completed,
+        },
+        { status: 502 }
+      );
+    }
+    output = loopResult.output;
   }
 
   const parsedOutput = EnrichmentOutputSchema.safeParse(output);
@@ -116,7 +142,7 @@ async function runAgentLoop(
   req: NextRequest,
   searchId: string,
   candidateNames: string[]
-): Promise<unknown> {
+): Promise<AgentLoopResult> {
   const { data: search, error: searchErr } = await supabase
     .from("searches")
     .select("*")
@@ -181,27 +207,62 @@ When calling aggregate_reviews, use these review domains: ${
   };
 
   let messages: MessageParam[] = [{ role: "user", content: userMessage }];
-  let response = await anthropic.messages.create({ ...params, messages });
+  const completed: string[] = [];
+
+  // Any Anthropic API error (rate limit, insufficient credit, etc.)
+  // aborts the run immediately — never retried silently.
+  let response;
+  try {
+    response = await anthropic.messages.create({ ...params, messages });
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "api_error",
+      error: error instanceof Error ? error.message : String(error),
+      completed,
+    };
+  }
 
   let turns = 0;
-  while (response.stop_reason === "tool_use" && turns < MAX_TURNS) {
+  while (response.stop_reason === "tool_use") {
+    if (turns >= MAX_TURNS) {
+      return {
+        ok: false,
+        reason: "max_iterations",
+        error: `Agent loop hit the ${MAX_TURNS}-iteration cap without producing a final answer.`,
+        completed,
+      };
+    }
+    turns++;
+
     const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
     const toolResults: ToolResultBlockParam[] = [];
     for (const block of toolUseBlocks) {
+      console.log(`[enrich] iteration ${turns}: calling ${block.name}`);
       const result = await executeTool(req, block.name, block.input);
       toolResults.push({
         type: "tool_result",
         tool_use_id: block.id,
         content: JSON.stringify(result),
       });
+      completed.push(`${block.name}(${JSON.stringify(block.input)})`);
     }
     messages = [
       ...messages,
       { role: "assistant", content: response.content },
       { role: "user", content: toolResults },
     ];
-    response = await anthropic.messages.create({ ...params, messages });
-    turns++;
+
+    try {
+      response = await anthropic.messages.create({ ...params, messages });
+    } catch (error) {
+      return {
+        ok: false,
+        reason: "api_error",
+        error: error instanceof Error ? error.message : String(error),
+        completed,
+      };
+    }
   }
 
   const textBlocks = response.content.filter((b) => b.type === "text");
@@ -215,7 +276,7 @@ When calling aggregate_reviews, use these review domains: ${
     .replace(/^```(?:json)?\n?/, "")
     .replace(/\n?```$/, "");
 
-  return JSON.parse(cleaned);
+  return { ok: true, output: JSON.parse(cleaned) };
 }
 
 async function executeTool(req: NextRequest, name: string, input: unknown) {

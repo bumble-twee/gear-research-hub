@@ -5,17 +5,17 @@
       "resolved": {
         "brand": "Blue Ice",
         "name": "Aero Lite",
-        "brand_url": "https://www.blue-ice.com/en-eu/products/aero-lite",
-        "image_url": "https://www.blue-ice.com/cdn/shop/products/aero-lite-og.jpg"
+        "brand_url": "https://www.blue-ice.com/en-eu/products/aero-lite-ice-screw",
+        "image_url": "https://www.blue-ice.com/cdn/shop/products/aero-lite-screw-og.jpg"
       },
       "specs": {
-        "weight_grams": 215,
-        "size": "50cm",
+        "weight_grams": 62,
+        "size": "13cm",
         "gender": "unisex",
         "features": {
-          "type": "ultralight glacier axe",
-          "material": "aluminum shaft and head",
-          "spike": "steel"
+          "type": "aluminum ice screw",
+          "material": "aluminum tube, steel teeth",
+          "hanger": "folding wire clipping hanger"
         }
       },
       "requirement_violations": [],
@@ -23,23 +23,23 @@
       "needs_verification": [
         {
           "field": "weight_grams",
-          "note": "Brand page lists 215g for 50cm without specifying spike material batch; confirm against a review's measured weight before relying on it for a hard cutoff."
+          "note": "Brand page lists 62g for the 13cm screw without specifying production batch; confirm against a review's measured weight before relying on it for a hard cutoff."
         }
       ],
       "price_result": {
         "results": [
           {
             "retailer": "snowleader.com",
-            "price": 67.9,
+            "price": 28.9,
             "currency": "EUR",
-            "url": "https://www.snowleader.com/aero-lite-BLIC00071.html",
+            "url": "https://www.snowleader.com/aero-lite-13cm-screw-BLIC00071.html",
             "in_stock": true,
             "size_matched": true
           },
           {
             "retailer": "glisshop.com",
             "currency": "EUR",
-            "url": "https://www.glisshop.com/broches-a-glace/blue-ice/aero-lite54898534",
+            "url": "https://www.glisshop.com/broches-a-glace/blue-ice/aero-lite-13cm54898534",
             "in_stock": false,
             "size_matched": true
           }
@@ -48,19 +48,19 @@
         "domains_failed": []
       },
       "review_result": {
-        "summary": "Reviewers consistently praise the Aero Lite's weight, calling it one of the lightest true ice axes on the market and a natural pick for glacier travel and ski mountaineering where the axe mostly rides on a pack. Durability draws more mixed comments: the aluminum shaft and head hold up fine for glacier travel and low-angle snow but several reviewers caution against sustained technical ice or mixed use, where the pick is noted to dull and deform faster than steel-headed axes. Reviewers rate the swing and self-arrest performance as adequate but not confidence-inspiring for anything steeper than moderate snow slopes.",
+        "summary": "Reviewers consistently praise the Aero Lite's low weight, calling it one of the lightest screws in its class and a natural pick for fast, high-volume placements on alpine routes where screw count matters more than raw durability. Durability draws more mixed comments: the aluminum tube holds up fine in soft to moderate ice but several reviewers caution against repeated placements in hard or rock-scraped ice, where the teeth are noted to dull faster than steel screws. Reviewers rate the starting bite and cranking speed as adequate but not as confidence-inspiring as Petzl's Speed thread pattern on hard water ice.",
         "review_links": [
           {
             "site": "outdoorgearlab.com",
-            "url": "https://www.outdoorgearlab.com/reviews/climbing/ice-axe/blue-ice-aero-lite",
+            "url": "https://www.outdoorgearlab.com/reviews/climbing/ice-screw/blue-ice-aero-lite",
             "rating": "8.0/10",
-            "key_takeaway": "Excellent weight-to-utility ratio for glacier travel; not built for technical ice."
+            "key_takeaway": "Excellent weight-to-strength ratio for alpine racks; teeth dull faster than steel on hard ice."
           },
           {
             "site": "blisterreview.com",
             "url": "https://blisterreview.com/gear-reviews/blue-ice-aero-lite",
             "rating": null,
-            "key_takeaway": "Durable enough for repeated ski mountaineering seasons, but the aluminum pick dulls quickly on hard ice."
+            "key_takeaway": "Aluminum tube holds up well across seasons of moderate ice but isn't the first choice for sustained hard-ice pitches."
           }
         ],
         "reviews_found": 2,
@@ -72,46 +72,46 @@
       "resolved": {
         "brand": "Petzl",
         "name": "Laser Speed Light",
-        "brand_url": "https://www.petzl.com/US/en/Mountain-Sports/Ice-axes/LASER-SPEED-LIGHT",
-        "image_url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master/default/laser-speed-light-og.jpg"
+        "brand_url": "https://www.petzl.com/US/en/Mountain-Sports/Ice-screws/LASER-SPEED-LIGHT",
+        "image_url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master/default/laser-speed-light-screw-og.jpg"
       },
       "specs": {
-        "weight_grams": 330,
-        "size": "50cm",
+        "weight_grams": 78,
+        "size": "16cm",
         "gender": "unisex",
         "features": {
-          "type": "technical mountaineering axe",
-          "material": "aluminum shaft, steel head",
-          "pick": "reverse-curve steel, interchangeable"
+          "type": "aluminum ice screw",
+          "material": "aluminum tube, steel teeth",
+          "hanger": "folding aluminum clipping hanger"
         }
       },
       "requirement_violations": [
         {
           "field": "weight_grams",
-          "required": "<= 250",
-          "actual": "330",
+          "required": "<= 70",
+          "actual": "78",
           "source": "petzl.com product page"
         }
       ],
       "ambiguities": [
-        "Petzl also sells a non-Light 'Laser Speed' model with a heavier steel shaft; resolved to the Light version based on the candidate name."
+        "Petzl also sells a non-Light 'Laser Speed' model with a heavier steel tube; resolved to the Light (aluminum) version based on the candidate name."
       ],
       "needs_verification": [],
       "price_result": {
         "results": [
           {
             "retailer": "snowleader.com",
-            "price": 119,
+            "price": 32.9,
             "currency": "EUR",
-            "url": "https://www.snowleader.com/laser-speed-light-PETZ00234.html",
+            "url": "https://www.snowleader.com/laser-speed-light-16cm-PETZ00234.html",
             "in_stock": true,
             "size_matched": true
           },
           {
             "retailer": "hardloop.fr",
-            "price": 124.9,
+            "price": 34.9,
             "currency": "EUR",
-            "url": "https://www.hardloop.fr/produit/petzl-laser-speed-light",
+            "url": "https://www.hardloop.fr/produit/petzl-laser-speed-light-16cm",
             "in_stock": true,
             "size_matched": true
           }
@@ -120,19 +120,19 @@
         "domains_failed": []
       },
       "review_result": {
-        "summary": "Reviewers weighted toward technical mountaineering rate the Laser Speed Light highly for its swing and pick bite on hard ice and mixed terrain, well above what an ultralight glacier axe like the Aero Lite offers. The tradeoff is weight and price: reviewers note it's noticeably heavier on the pack for approaches that don't need technical performance, and the interchangeable pick system adds long-term cost. Build quality and steel head durability get uniformly positive marks even after multiple seasons of technical use.",
+        "summary": "Reviewers weighted toward technical ice climbing rate the Laser Speed Light highly for its Speed thread pattern, which starts a placement with a single hand motion and cranks noticeably faster than the Aero Lite on hard water ice. The tradeoff is weight and price: reviewers note it's heavier than pure alpine-rack screws and the folding hanger adds a moving part that needs occasional cleaning when it ices up. Teeth and tube durability get uniformly positive marks even after multiple seasons of repeated placements in hard, brittle ice.",
         "review_links": [
           {
             "site": "outdoorgearlab.com",
-            "url": "https://www.outdoorgearlab.com/reviews/climbing/ice-axe/petzl-laser-speed-light",
+            "url": "https://www.outdoorgearlab.com/reviews/climbing/ice-screw/petzl-laser-speed-light",
             "rating": "9.0/10",
-            "key_takeaway": "Top-tier technical performance; heavier than pure glacier-travel axes."
+            "key_takeaway": "Fastest starting bite in its class; heavier than pure alpine-rack screws."
           },
           {
             "site": "blisterreview.com",
             "url": "https://blisterreview.com/gear-reviews/petzl-laser-speed-light",
             "rating": null,
-            "key_takeaway": "Steel head holds an edge through repeated technical seasons with minimal wear."
+            "key_takeaway": "Teeth hold an edge through repeated hard-ice placements with minimal wear."
           }
         ],
         "reviews_found": 2,
@@ -142,6 +142,6 @@
   ],
   "run_notes": [
     "Both candidates resolved via official brand product pages.",
-    "Petzl Laser Speed Light exceeds the 250g weight requirement (330g); flagged as a requirement violation rather than dropped, per v1 policy."
+    "Petzl Laser Speed Light (16cm) exceeds the 70g weight requirement (78g); flagged as a requirement violation rather than dropped, per v1 policy."
   ]
 }

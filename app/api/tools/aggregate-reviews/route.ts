@@ -59,7 +59,9 @@ Rules:
       ],
     });
 
-    console.log(JSON.stringify(response.content, null, 2));
+    if (process.env.DEBUG_TOOLS === "true") {
+      console.log(JSON.stringify(response.content, null, 2));
+    }
 
     const textBlock = response.content.find((b) => b.type === "text");
     const text = textBlock?.type === "text" ? textBlock.text : "";

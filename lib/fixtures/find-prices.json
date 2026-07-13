@@ -2,16 +2,16 @@
   "results": [
     {
       "retailer": "snowleader.com",
-      "price": 67.9,
+      "price": 28.9,
       "currency": "EUR",
-      "url": "https://www.snowleader.com/aero-lite-BLIC00071.html",
+      "url": "https://www.snowleader.com/aero-lite-13cm-screw-BLIC00071.html",
       "in_stock": true,
       "size_matched": true
     },
     {
       "retailer": "glisshop.com",
       "currency": "EUR",
-      "url": "https://www.glisshop.com/broches-a-glace/blue-ice/aero-lite54898534",
+      "url": "https://www.glisshop.com/broches-a-glace/blue-ice/aero-lite-13cm54898534",
       "in_stock": false,
       "size_matched": true
     }

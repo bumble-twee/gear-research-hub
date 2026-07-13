@@ -79,7 +79,9 @@ Rules:
       continuations++;
     }
 
-    console.log(JSON.stringify(response.content, null, 2));
+    if (process.env.DEBUG_TOOLS === "true") {
+      console.log(JSON.stringify(response.content, null, 2));
+    }
 
     // web_search inserts tool_use/tool_result blocks before the model's
     // final answer, and may also emit preamble text blocks (e.g. "I'll
