@@ -10,7 +10,7 @@ Steps 1-5 of PLAN.md are done:
 2. **Seeding** — `preferred_sites` seeded with real retailer and review domains.
 3. **find-prices** — `app/api/tools/find-prices/route.ts` implemented and tested.
 4. **writeSnapshotAndCache** — `lib/db/writeSnapshotAndCache.ts` exists.
-5. **aggregate-reviews** and the **enrich orchestrator loop** — `app/api/tools/aggregate-reviews/route.ts` and `app/api/enrich/route.ts` implemented.
+5. **aggregate-reviews** and the **enrich orchestrator loop** — `app/api/tools/aggregate-reviews/route.ts` and `app/api/enrich/route.ts` implemented: agent loop calls `find_prices`/`aggregate_reviews` as tools, output is zod-validated (whole run rejected on invalid JSON, no partial writes), candidates are written independently (one failing doesn't block the others). Tested end-to-end in mock mode; not yet run live.
 
 Not yet built: the three UI views (searches list, search detail, new search form), CSV export.
 
@@ -38,16 +38,20 @@ Note: this project's actual file layout has no `src/` prefix — code lives unde
 - Out-of-stock items still go into `results`, marked with `in_stock: false` — they are not dropped or filtered out.
 - Never write a placeholder-zero price. If a real price can't be found, omit it rather than fabricating `0`.
 
+Known gap: `aggregate-reviews/route.ts` still reads the FIRST text block (not the last) when extracting the answer, unlike find-prices. Same root cause, not yet fixed there.
+
 ## Mock mode
 
-Set `MOCK_TOOLS=true` to skip the Anthropic API call in all three routes
-(`find-prices`, `aggregate-reviews`, `enrich`) and use the canned
-fixtures in `lib/fixtures/` instead. Every other line of downstream
-logic — parsing, sorting, `domains_failed` computation, zod validation,
-and all database writes — runs exactly as it would on a live call, so
-mock mode exercises the real write path against fixture data. Each
-mocked request logs a single `MOCK MODE` line so a mock run can never
-be mistaken for a live one in the logs.
+Set `MOCK_TOOLS=true` in `.env.local` to skip the Anthropic API call in
+all three routes (`find-prices`, `aggregate-reviews`, `enrich`) and use
+the canned fixtures in `lib/fixtures/` instead (`find-prices.json`,
+`aggregate-reviews.json`, `enrich-answer.json`). Every other line of
+downstream logic — parsing, sorting, `domains_failed` computation, zod
+validation, and all database writes — runs exactly as it would on a
+live call; mock mode does not stub or skip DB writes, it only replaces
+what the model would have returned. Each mocked request logs a single
+`MOCK MODE` line so a mock run can never be mistaken for a live one in
+the logs.
 
 **Tests default to mock mode. Live runs (real Anthropic calls, real
 web search) are explicit** — set `MOCK_TOOLS` unset or `false` and say
