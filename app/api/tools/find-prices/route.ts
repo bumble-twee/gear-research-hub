@@ -5,10 +5,16 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { writePriceSnapshotAndCache } from "@/lib/db/writeSnapshotAndCache";
 import type { FindPricesResult } from "@/lib/agent/tools";
 
 const anthropic = new Anthropic();
+
+// web_search is a server-side tool: a single API call can pause mid-turn
+// (stop_reason "pause_turn") for a long-running search and expects the
+// caller to send the response back as-is to let the model continue.
+const MAX_CONTINUATIONS = 5;
 
 export async function POST(req: NextRequest) {
   const { brand, item_name, size, retailer_domains, candidateId } =
@@ -17,13 +23,24 @@ export async function POST(req: NextRequest) {
   const searched_at = new Date().toISOString();
   const sizeClause = size ? ` size "${size}"` : "";
 
-  const response = await anthropic.messages.create({
+  const params = {
     model: "claude-sonnet-4-6",
     max_tokens: 4096,
-    messages: [
+    tools: [
       {
-        role: "user",
-        content: `Find current prices for ${brand} ${item_name}${sizeClause} on each retailer domain: ${retailer_domains.join(", ")}.
+        type: "web_search_20250305" as const,
+        name: "web_search" as const,
+        allowed_domains: retailer_domains,
+        allowed_callers: ["direct" as const],
+        max_uses: Math.max(retailer_domains.length, 1),
+      },
+    ],
+  };
+
+  let messages: MessageParam[] = [
+    {
+      role: "user",
+      content: `Find current prices for ${brand} ${item_name}${sizeClause} on each retailer domain: ${retailer_domains.join(", ")}.
 
 Search every listed domain. Output your final answer as JSON wrapped in <answer></answer> tags, with no other text inside the tags.
 
@@ -36,22 +53,32 @@ Rules:
 - Never output 0 as a placeholder price.
 - Sort results cheapest first among in-stock items (out-of-stock items after in-stock).
 - retailer must be the domain.`,
-      },
-    ],
-    tools: [
-      {
-        type: "web_search_20250305",
-        name: "web_search",
-        allowed_domains: retailer_domains,
-        allowed_callers: ["direct"],
-        max_uses: Math.max(retailer_domains.length, 1),
-      },
-    ],
-  });
+    },
+  ];
+
+  let response = await anthropic.messages.create({ ...params, messages });
+
+  let continuations = 0;
+  while (
+    response.stop_reason === "pause_turn" &&
+    continuations < MAX_CONTINUATIONS
+  ) {
+    messages = [
+      ...messages,
+      { role: "assistant", content: response.content },
+    ];
+    response = await anthropic.messages.create({ ...params, messages });
+    continuations++;
+  }
 
   console.log(JSON.stringify(response.content, null, 2));
 
-  const textBlock = response.content.find((b) => b.type === "text");
+  // web_search inserts tool_use/tool_result blocks before the model's
+  // final answer, and may also emit preamble text blocks (e.g. "I'll
+  // search now") before those. The <answer> tags are only ever in the
+  // LAST text block, never the first.
+  const textBlocks = response.content.filter((b) => b.type === "text");
+  const textBlock = textBlocks[textBlocks.length - 1];
   const text = textBlock?.type === "text" ? textBlock.text : "";
 
   const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/);
@@ -83,8 +110,21 @@ Rules:
         r.url.toLowerCase().includes(domain.toLowerCase())
     );
 
+  // Priced-and-in-stock results sort cheapest first; anything without a
+  // usable price (out-of-stock, price omitted) sorts after them instead
+  // of corrupting the comparator with NaN.
+  const isPriced = (r: FindPricesResult["results"][number]) =>
+    r.in_stock && typeof r.price === "number";
+
   const result: FindPricesResult = {
-    results: [...parsed.results].sort((a, b) => a.price - b.price),
+    results: [...parsed.results].sort((a, b) => {
+      const aPriced = isPriced(a);
+      const bPriced = isPriced(b);
+      if (aPriced && bPriced) return a.price! - b.price!;
+      if (aPriced) return -1;
+      if (bPriced) return 1;
+      return 0;
+    }),
     searched_at,
     domains_failed: retailer_domains.filter(
       (d: string) => !domainHasResult(d)

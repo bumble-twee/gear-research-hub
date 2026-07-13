@@ -16,7 +16,16 @@ export async function writePriceSnapshotAndCache(
   candidateId: string,
   result: FindPricesResult
 ) {
-  const cheapest = result.results[0] ?? null;
+  // Recompute independently of any upstream sort: only an in-stock
+  // result with an actual price can become the snapshot/cache value.
+  const priced = result.results.filter(
+    (r): r is typeof r & { price: number } =>
+      r.in_stock && typeof r.price === "number"
+  );
+  const cheapest =
+    priced.length > 0
+      ? priced.reduce((min, r) => (r.price < min.price ? r : min))
+      : null;
 
   // Supabase JS has no multi-statement transactions; use an RPC for
   // true atomicity later. For v1, snapshot first, cache second, and

@@ -55,7 +55,8 @@ export const aggregateReviewsTool = {
 export interface FindPricesResult {
   results: {
     retailer: string;
-    price: number;
+    // Omitted for out-of-stock items; never a placeholder 0.
+    price?: number;
     currency: string;
     url: string;
     in_stock: boolean;
