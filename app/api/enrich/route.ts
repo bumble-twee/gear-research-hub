@@ -16,8 +16,11 @@ import {
   writeReviewSnapshot,
 } from "@/lib/db/writeSnapshotAndCache";
 import mockEnrichAnswer from "@/lib/fixtures/enrich-answer.json";
+import { isMockMode } from "@/lib/env";
 
-const anthropic = new Anthropic();
+// maxRetries: 0 and an explicit timeout so a stalled or failing call
+// surfaces immediately as a thrown error instead of retrying silently.
+const anthropic = new Anthropic({ maxRetries: 0, timeout: 300_000 });
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -27,6 +30,25 @@ const supabase = createClient(
 // to be confused with the server-side web_search pause_turn loop that
 // lives inside those two tool routes.
 const MAX_TURNS = 15;
+
+// A stalled Supabase call (dropped connection, hung keep-alive socket)
+// never rejects on its own — it just never resolves, even though the
+// write may have already committed server-side. Without a timeout,
+// `await` on that call would hang the request forever. Race every DB
+// operation against this so the route always returns a response.
+const DB_OP_TIMEOUT_MS = 30_000;
+
+function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`${label} timed out after ${DB_OP_TIMEOUT_MS}ms`)),
+        DB_OP_TIMEOUT_MS
+      )
+    ),
+  ]);
+}
 
 // runAgentLoop never throws for an aborted run — it reports the abort
 // so the caller can respond without touching the database. Only a
@@ -41,101 +63,127 @@ type AgentLoopResult =
     };
 
 export async function POST(req: NextRequest) {
-  const { searchId, candidateNames } = await req.json();
+  const mockMode = isMockMode();
+  console.log(`[enrich] mode: ${mockMode ? "MOCK" : "LIVE"}`);
 
-  let output: unknown;
-  if (process.env.MOCK_TOOLS === "true") {
-    console.log("MOCK MODE");
-    output = mockEnrichAnswer;
-  } else {
-    const loopResult = await runAgentLoop(req, searchId, candidateNames);
-    if (!loopResult.ok) {
-      console.error(`Agent loop aborted (${loopResult.reason}):`, loopResult.error);
+  try {
+    const { searchId, candidateNames } = await req.json();
+
+    let output: unknown;
+    if (mockMode) {
+      output = mockEnrichAnswer;
+    } else {
+      const loopResult = await runAgentLoop(req, searchId, candidateNames);
+      if (!loopResult.ok) {
+        console.error(`Agent loop aborted (${loopResult.reason}):`, loopResult.error);
+        return NextResponse.json(
+          {
+            status: "aborted",
+            searchId,
+            reason: loopResult.reason,
+            error: loopResult.error,
+            completed: loopResult.completed,
+          },
+          { status: 502 }
+        );
+      }
+      output = loopResult.output;
+    }
+
+    const parsedOutput = EnrichmentOutputSchema.safeParse(output);
+    if (!parsedOutput.success) {
+      console.error(parsedOutput.error);
       return NextResponse.json(
         {
-          status: "aborted",
+          status: "rejected",
           searchId,
-          reason: loopResult.reason,
-          error: loopResult.error,
-          completed: loopResult.completed,
+          error: "Agent output failed validation; no candidates written.",
+          issues: parsedOutput.error.issues,
         },
-        { status: 502 }
+        { status: 422 }
       );
     }
-    output = loopResult.output;
-  }
 
-  const parsedOutput = EnrichmentOutputSchema.safeParse(output);
-  if (!parsedOutput.success) {
-    console.error(parsedOutput.error);
+    // Process candidates independently: one candidate's write failure
+    // must not stop the others.
+    const results: {
+      input_name: string;
+      candidateId?: string;
+      error?: string;
+    }[] = [];
+
+    for (const candidate of parsedOutput.data.candidates) {
+      try {
+        const { data: inserted, error: insertErr } = await withTimeout(
+          supabase
+            .from("candidates")
+            .insert({
+              search_id: searchId,
+              brand: candidate.resolved.brand,
+              name: candidate.resolved.name,
+              brand_url: candidate.resolved.brand_url,
+              image_url: candidate.resolved.image_url,
+              size: candidate.specs.size,
+              weight_grams: candidate.specs.weight_grams,
+              gender: candidate.specs.gender,
+              features: candidate.specs.features,
+              source: "agent",
+              input_name: candidate.input_name,
+              requirement_violations: candidate.requirement_violations,
+              needs_verification: candidate.needs_verification,
+            })
+            .select()
+            .single(),
+          `insert candidate "${candidate.input_name}"`
+        );
+        if (insertErr) throw insertErr;
+
+        // Price and review writes are independent; neither blocks the other.
+        const [priceOutcome, reviewOutcome] = await Promise.allSettled([
+          withTimeout(
+            writePriceSnapshotAndCache(inserted.id, candidate.price_result),
+            `price write for "${candidate.input_name}"`
+          ),
+          withTimeout(
+            writeReviewSnapshot(inserted.id, candidate.review_result),
+            `review write for "${candidate.input_name}"`
+          ),
+        ]);
+        const writeErrors = [priceOutcome, reviewOutcome]
+          .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+          .map((r) => String(r.reason));
+
+        results.push({
+          input_name: candidate.input_name,
+          candidateId: inserted.id,
+          ...(writeErrors.length > 0 && { error: writeErrors.join("; ") }),
+        });
+      } catch (error) {
+        console.error(`Candidate "${candidate.input_name}" failed:`, error);
+        results.push({ input_name: candidate.input_name, error: String(error) });
+      }
+    }
+
+    return NextResponse.json({
+      status: "completed",
+      searchId,
+      candidates: results,
+      run_notes: parsedOutput.data.run_notes,
+    });
+  } catch (error) {
+    // Last-resort safety net: no matter what throws (bad request body,
+    // an unexpected exception in runAgentLoop's setup queries, etc.),
+    // the route must still return a response instead of leaving the
+    // client hanging.
+    console.error("Unhandled error in /api/enrich:", error);
     return NextResponse.json(
       {
-        status: "rejected",
-        searchId,
-        error: "Agent output failed validation; no candidates written.",
-        issues: parsedOutput.error.issues,
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
       },
-      { status: 422 }
+      { status: 500 }
     );
   }
-
-  // Process candidates independently: one candidate's write failure
-  // must not stop the others.
-  const results: {
-    input_name: string;
-    candidateId?: string;
-    error?: string;
-  }[] = [];
-
-  for (const candidate of parsedOutput.data.candidates) {
-    try {
-      const { data: inserted, error: insertErr } = await supabase
-        .from("candidates")
-        .insert({
-          search_id: searchId,
-          brand: candidate.resolved.brand,
-          name: candidate.resolved.name,
-          brand_url: candidate.resolved.brand_url,
-          image_url: candidate.resolved.image_url,
-          size: candidate.specs.size,
-          weight_grams: candidate.specs.weight_grams,
-          gender: candidate.specs.gender,
-          features: candidate.specs.features,
-          source: "agent",
-          input_name: candidate.input_name,
-          requirement_violations: candidate.requirement_violations,
-          needs_verification: candidate.needs_verification,
-        })
-        .select()
-        .single();
-      if (insertErr) throw insertErr;
-
-      // Price and review writes are independent; neither blocks the other.
-      const [priceOutcome, reviewOutcome] = await Promise.allSettled([
-        writePriceSnapshotAndCache(inserted.id, candidate.price_result),
-        writeReviewSnapshot(inserted.id, candidate.review_result),
-      ]);
-      const writeErrors = [priceOutcome, reviewOutcome]
-        .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-        .map((r) => String(r.reason));
-
-      results.push({
-        input_name: candidate.input_name,
-        candidateId: inserted.id,
-        ...(writeErrors.length > 0 && { error: writeErrors.join("; ") }),
-      });
-    } catch (error) {
-      console.error(`Candidate "${candidate.input_name}" failed:`, error);
-      results.push({ input_name: candidate.input_name, error: String(error) });
-    }
-  }
-
-  return NextResponse.json({
-    status: "completed",
-    searchId,
-    candidates: results,
-    run_notes: parsedOutput.data.run_notes,
-  });
 }
 
 async function runAgentLoop(
@@ -209,9 +257,22 @@ When calling aggregate_reviews, use these review domains: ${
   let messages: MessageParam[] = [{ role: "user", content: userMessage }];
   const completed: string[] = [];
 
-  // Any Anthropic API error (rate limit, insufficient credit, etc.)
-  // aborts the run immediately — never retried silently.
+  const logBeforeCall = (iteration: number) => {
+    const inputSize = JSON.stringify(messages).length;
+    console.log(
+      `[enrich] ${new Date().toISOString()} iteration ${iteration}: sending messages.create (~${inputSize} chars input)`
+    );
+  };
+  const logAfterCall = (iteration: number, res: Anthropic.Messages.Message) => {
+    console.log(
+      `[enrich] ${new Date().toISOString()} iteration ${iteration}: stop_reason=${res.stop_reason} input_tokens=${res.usage?.input_tokens} output_tokens=${res.usage?.output_tokens}`
+    );
+  };
+
+  // Any Anthropic API error (rate limit, insufficient credit, timeout,
+  // etc.) aborts the run immediately — never retried silently.
   let response;
+  logBeforeCall(0);
   try {
     response = await anthropic.messages.create({ ...params, messages });
   } catch (error) {
@@ -222,9 +283,10 @@ When calling aggregate_reviews, use these review domains: ${
       completed,
     };
   }
+  logAfterCall(0, response);
 
   let turns = 0;
-  while (response.stop_reason === "tool_use") {
+  while (response.stop_reason === "tool_use" || response.stop_reason === "pause_turn") {
     if (turns >= MAX_TURNS) {
       return {
         ok: false,
@@ -235,24 +297,30 @@ When calling aggregate_reviews, use these review domains: ${
     }
     turns++;
 
-    const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
-    const toolResults: ToolResultBlockParam[] = [];
-    for (const block of toolUseBlocks) {
-      console.log(`[enrich] iteration ${turns}: calling ${block.name}`);
-      const result = await executeTool(req, block.name, block.input);
-      toolResults.push({
-        type: "tool_result",
-        tool_use_id: block.id,
-        content: JSON.stringify(result),
-      });
-      completed.push(`${block.name}(${JSON.stringify(block.input)})`);
+    if (response.stop_reason === "pause_turn") {
+      console.log(`[enrich] iteration ${turns}: pause_turn, continuing`);
+      messages = [...messages, { role: "assistant", content: response.content }];
+    } else {
+      const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
+      const toolResults: ToolResultBlockParam[] = [];
+      for (const block of toolUseBlocks) {
+        console.log(`[enrich] iteration ${turns}: calling ${block.name}`);
+        const result = await executeTool(req, block.name, block.input);
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify(result),
+        });
+        completed.push(`${block.name}(${JSON.stringify(block.input)})`);
+      }
+      messages = [
+        ...messages,
+        { role: "assistant", content: response.content },
+        { role: "user", content: toolResults },
+      ];
     }
-    messages = [
-      ...messages,
-      { role: "assistant", content: response.content },
-      { role: "user", content: toolResults },
-    ];
 
+    logBeforeCall(turns);
     try {
       response = await anthropic.messages.create({ ...params, messages });
     } catch (error) {
@@ -263,6 +331,7 @@ When calling aggregate_reviews, use these review domains: ${
         completed,
       };
     }
+    logAfterCall(turns, response);
   }
 
   const textBlocks = response.content.filter((b) => b.type === "text");

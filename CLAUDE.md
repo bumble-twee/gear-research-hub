@@ -49,11 +49,24 @@ the canned fixtures in `lib/fixtures/` instead (`find-prices.json`,
 downstream logic — parsing, sorting, `domains_failed` computation, zod
 validation, and all database writes — runs exactly as it would on a
 live call; mock mode does not stub or skip DB writes, it only replaces
-what the model would have returned. Each mocked request logs a single
-`MOCK MODE` line so a mock run can never be mistaken for a live one in
-the logs.
+what the model would have returned.
+
+`MOCK_TOOLS` and `DEBUG_TOOLS` (the latter gates a raw Claude-response
+dump in the two tool routes) are read in exactly one place —
+`lib/env.ts`'s `isMockMode()` / `isDebugTools()` — both requiring the
+literal string `"true"`. Every route calls these helpers instead of
+reading `process.env` directly. Each of the three routes logs its
+resolved mode on every request (`[find-prices] mode: MOCK`, `[enrich]
+mode: LIVE`, etc.) so the active mode is always visible in the
+terminal.
 
 **Tests default to mock mode. Live runs (real Anthropic calls, real
 web search) are explicit** — set `MOCK_TOOLS` unset or `false` and say
 so when asking for one, since it costs API credits and writes
 real search results.
+
+The enrich route wraps every per-candidate Supabase write in a 30s
+timeout (`withTimeout` in `app/api/enrich/route.ts`) and the whole
+handler in a top-level try/catch: a stalled connection can otherwise
+leave `await` pending forever even after the write has already
+committed server-side, and the route must always return a response.

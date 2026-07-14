@@ -5,6 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { writeReviewSnapshot } from "@/lib/db/writeSnapshotAndCache";
 import type { AggregateReviewsResult } from "@/lib/agent/tools";
 import mockAggregateReviews from "@/lib/fixtures/aggregate-reviews.json";
+import { isMockMode, isDebugTools } from "@/lib/env";
 
 const anthropic = new Anthropic();
 
@@ -12,10 +13,12 @@ export async function POST(req: NextRequest) {
   const { brand, item_name, review_domains, focus_criteria, candidateId } =
     await req.json();
 
+  const mockMode = isMockMode();
+  console.log(`[aggregate-reviews] mode: ${mockMode ? "MOCK" : "LIVE"}`);
+
   let parsed: AggregateReviewsResult;
 
-  if (process.env.MOCK_TOOLS === "true") {
-    console.log("MOCK MODE");
+  if (mockMode) {
     parsed = mockAggregateReviews as AggregateReviewsResult;
   } else {
     const focusClause =
@@ -59,7 +62,7 @@ Rules:
       ],
     });
 
-    if (process.env.DEBUG_TOOLS === "true") {
+    if (isDebugTools()) {
       console.log(JSON.stringify(response.content, null, 2));
     }
 

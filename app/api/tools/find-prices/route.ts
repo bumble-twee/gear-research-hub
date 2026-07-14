@@ -9,6 +9,7 @@ import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { writePriceSnapshotAndCache } from "@/lib/db/writeSnapshotAndCache";
 import type { FindPricesResult } from "@/lib/agent/tools";
 import mockFindPrices from "@/lib/fixtures/find-prices.json";
+import { isMockMode, isDebugTools } from "@/lib/env";
 
 const anthropic = new Anthropic();
 
@@ -22,11 +23,12 @@ export async function POST(req: NextRequest) {
     await req.json();
 
   const searched_at = new Date().toISOString();
+  const mockMode = isMockMode();
+  console.log(`[find-prices] mode: ${mockMode ? "MOCK" : "LIVE"}`);
 
   let parsed: FindPricesResult;
 
-  if (process.env.MOCK_TOOLS === "true") {
-    console.log("MOCK MODE");
+  if (mockMode) {
     parsed = mockFindPrices as FindPricesResult;
   } else {
     const sizeClause = size ? ` size "${size}"` : "";
@@ -79,7 +81,7 @@ Rules:
       continuations++;
     }
 
-    if (process.env.DEBUG_TOOLS === "true") {
+    if (isDebugTools()) {
       console.log(JSON.stringify(response.content, null, 2));
     }
 
