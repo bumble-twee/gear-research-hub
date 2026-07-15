@@ -38,17 +38,19 @@ export async function POST(req: NextRequest) {
             ", "
           )}.
 
-Search every listed domain.${focusClause} Write a synthesized summary (a few sentences) of what reviewers say, not a list of separate per-site summaries. Output your final answer as JSON wrapped in <answer></answer> tags, with no other text inside the tags.
+Search every listed domain.${focusClause} Write a synthesized summary of what reviewers say, not a list of separate per-site summaries. Output your final answer as JSON wrapped in <answer></answer> tags, with no other text inside the tags.
 
 The JSON must match:
-{"summary":"<synthesized summary weighted toward the focus criteria>","review_links":[{"site":"<domain>","url":"https://...","rating":"4.5/5","key_takeaway":"<one sentence>"}],"reviews_found":3,"domains_failed":[]}
+{"summary":"<synthesized summary weighted toward the focus criteria>","review_links":[{"site":"<domain>","url":"https://...","rating":"4.5/5","key_takeaway":"<one short clause>"}],"reviews_found":3,"domains_failed":[]}
 
 Rules:
 - domains_failed is ONLY for sites that could not be checked or returned no usable data. Do not put sites with zero matching reviews there if the site itself was reachable — just don't add a review_links entry for them.
 - rating should be the site's own rating format as a string (e.g. "4.5/5", "8/10"), or null if the site gives no rating.
 - reviews_found is the count of distinct reviews/sources that contributed to the summary, not the count of review_links entries.
 - site must be the domain.
-- If no reviews are found on any site, summary should say so plainly and review_links should be empty.`,
+- summary is a maximum of two sentences, decision-oriented (does this product suit the user, not just "reviewers liked it"), and weighted toward the focus criteria above anything else. Paraphrase in your own words — do not reproduce review phrasing verbatim.
+- key_takeaway is one short clause, not a full sentence.
+- If no reviews are found on any site, summary should say so plainly (still within two sentences) and review_links should be empty.`,
         },
       ],
       tools: [

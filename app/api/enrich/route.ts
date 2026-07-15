@@ -175,6 +175,25 @@ export async function POST(req: NextRequest) {
       })
     );
 
+    // Load existing candidates for this search so a re-run on a name
+    // already researched updates that candidate instead of creating a
+    // duplicate. Matched case-insensitively on input_name; candidates
+    // without an input_name (manual entries) never match.
+    const { data: existingCandidates, error: existingErr } = await withTimeout(
+      supabase
+        .from("candidates")
+        .select("id, input_name, size, weight_grams, gender")
+        .eq("search_id", searchId),
+      "load existing candidates"
+    );
+    if (existingErr) throw existingErr;
+
+    const existingByInputName = new Map(
+      (existingCandidates ?? [])
+        .filter((c) => c.input_name)
+        .map((c) => [c.input_name!.toLowerCase(), c])
+    );
+
     // Process candidates independently: one candidate's write failure
     // must not stop the others.
     const results: {
@@ -182,41 +201,71 @@ export async function POST(req: NextRequest) {
       candidateId?: string;
       error?: string;
     }[] = [];
+    const reEnrichedNames: string[] = [];
 
     for (const candidate of verifiedCandidates) {
+      const existing = existingByInputName.get(candidate.input_name.toLowerCase());
       try {
-        const { data: inserted, error: insertErr } = await withTimeout(
-          supabase
-            .from("candidates")
-            .insert({
-              search_id: searchId,
-              brand: candidate.resolved.brand,
-              name: candidate.resolved.name,
-              brand_url: candidate.resolved.brand_url,
-              image_url: candidate.resolved.image_url,
-              size: candidate.specs.size,
-              weight_grams: candidate.specs.weight_grams,
-              gender: candidate.specs.gender,
-              features: candidate.specs.features,
-              source: "agent",
-              input_name: candidate.input_name,
-              requirement_violations: candidate.requirement_violations,
-              needs_verification: candidate.needs_verification,
-            })
-            .select()
-            .single(),
-          `insert candidate "${candidate.input_name}"`
-        );
-        if (insertErr) throw insertErr;
+        let candidateId: string;
+        if (existing) {
+          candidateId = existing.id;
+          reEnrichedNames.push(candidate.input_name);
+
+          const specsUpdate: Record<string, unknown> = {};
+          if (existing.size === null && candidate.specs.size !== null) {
+            specsUpdate.size = candidate.specs.size;
+          }
+          if (existing.weight_grams === null && candidate.specs.weight_grams !== null) {
+            specsUpdate.weight_grams = candidate.specs.weight_grams;
+          }
+          if (existing.gender === null && candidate.specs.gender !== null) {
+            specsUpdate.gender = candidate.specs.gender;
+          }
+          if (Object.keys(specsUpdate).length > 0) {
+            const { error: updateErr } = await withTimeout(
+              supabase
+                .from("candidates")
+                .update({ ...specsUpdate, updated_at: new Date().toISOString() })
+                .eq("id", candidateId),
+              `specs update for "${candidate.input_name}"`
+            );
+            if (updateErr) throw updateErr;
+          }
+        } else {
+          const { data: inserted, error: insertErr } = await withTimeout(
+            supabase
+              .from("candidates")
+              .insert({
+                search_id: searchId,
+                brand: candidate.resolved.brand,
+                name: candidate.resolved.name,
+                brand_url: candidate.resolved.brand_url,
+                image_url: candidate.resolved.image_url,
+                size: candidate.specs.size,
+                weight_grams: candidate.specs.weight_grams,
+                gender: candidate.specs.gender,
+                features: candidate.specs.features,
+                source: "agent",
+                input_name: candidate.input_name,
+                requirement_violations: candidate.requirement_violations,
+                needs_verification: candidate.needs_verification,
+              })
+              .select()
+              .single(),
+            `insert candidate "${candidate.input_name}"`
+          );
+          if (insertErr) throw insertErr;
+          candidateId = inserted.id;
+        }
 
         // Price and review writes are independent; neither blocks the other.
         const [priceOutcome, reviewOutcome] = await Promise.allSettled([
           withTimeout(
-            writePriceSnapshotAndCache(inserted.id, candidate.price_result),
+            writePriceSnapshotAndCache(candidateId, candidate.price_result),
             `price write for "${candidate.input_name}"`
           ),
           withTimeout(
-            writeReviewSnapshot(inserted.id, candidate.review_result),
+            writeReviewSnapshot(candidateId, candidate.review_result),
             `review write for "${candidate.input_name}"`
           ),
         ]);
@@ -226,7 +275,7 @@ export async function POST(req: NextRequest) {
 
         results.push({
           input_name: candidate.input_name,
-          candidateId: inserted.id,
+          candidateId,
           ...(writeErrors.length > 0 && { error: writeErrors.join("; ") }),
         });
       } catch (error) {
@@ -235,11 +284,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const runNotes = [...parsedOutput.data.run_notes];
+    if (reEnrichedNames.length > 0) {
+      runNotes.push(
+        `Treated as re-enrichment of existing candidates, not new candidates: ${reEnrichedNames.join(", ")}`
+      );
+    }
+
     return NextResponse.json({
       status: "completed",
       searchId,
       candidates: results,
-      run_notes: parsedOutput.data.run_notes,
+      run_notes: runNotes,
     });
   } catch (error) {
     // Last-resort safety net: no matter what throws (bad request body,

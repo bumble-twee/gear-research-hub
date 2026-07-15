@@ -58,11 +58,17 @@ export function CandidateList({
   candidates,
   priceByCandidate,
   reviewByCandidate,
+  retailerDomains,
+  reviewDomains,
+  focusCriteria,
 }: {
   searchId: string;
   candidates: CandidateRow[];
   priceByCandidate: Record<string, PriceSnapshotRow | null>;
   reviewByCandidate: Record<string, ReviewSnapshotRow | null>;
+  retailerDomains: string[];
+  reviewDomains: string[];
+  focusCriteria: string[];
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("fit");
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -130,6 +136,9 @@ export function CandidateList({
             candidate={candidate}
             priceSnapshot={priceByCandidate[candidate.id] ?? null}
             reviewSnapshot={reviewByCandidate[candidate.id] ?? null}
+            retailerDomains={retailerDomains}
+            reviewDomains={reviewDomains}
+            focusCriteria={focusCriteria}
           />
         ))}
         {visible.length === 0 && (

@@ -34,22 +34,36 @@ export default async function SearchDetailPage({
   }
   const searchRow = search as SearchRow;
 
-  const [{ data: candidates, error: candidatesErr }, ownedItem] = await Promise.all([
-    supabase
-      .from("candidates")
-      .select("*")
-      .eq("search_id", id)
-      .order("created_at", { ascending: true }),
-    searchRow.replaces_item_id
-      ? supabase
-          .from("owned_items")
-          .select("*")
-          .eq("id", searchRow.replaces_item_id)
-          .single()
-          .then((r) => r.data as OwnedItemRow | null)
-      : Promise.resolve(null),
-  ]);
+  const [{ data: candidates, error: candidatesErr }, ownedItem, { data: sites, error: sitesErr }] =
+    await Promise.all([
+      supabase
+        .from("candidates")
+        .select("*")
+        .eq("search_id", id)
+        .order("created_at", { ascending: true }),
+      searchRow.replaces_item_id
+        ? supabase
+            .from("owned_items")
+            .select("*")
+            .eq("id", searchRow.replaces_item_id)
+            .single()
+            .then((r) => r.data as OwnedItemRow | null)
+        : Promise.resolve(null),
+      supabase
+        .from("preferred_sites")
+        .select("site_type, domain, priority")
+        .eq("active", true)
+        .order("priority", { ascending: true }),
+    ]);
   if (candidatesErr) throw candidatesErr;
+  if (sitesErr) throw sitesErr;
+
+  const retailerDomains = (sites ?? [])
+    .filter((s) => s.site_type === "retailer")
+    .map((s) => s.domain);
+  const reviewDomains = (sites ?? [])
+    .filter((s) => s.site_type === "review")
+    .map((s) => s.domain);
 
   const candidateRows = (candidates ?? []) as CandidateRow[];
   const candidateIds = candidateRows.map((c) => c.id);
@@ -111,6 +125,9 @@ export default async function SearchDetailPage({
         candidates={candidateRows}
         priceByCandidate={priceByCandidate}
         reviewByCandidate={reviewByCandidate}
+        retailerDomains={retailerDomains}
+        reviewDomains={reviewDomains}
+        focusCriteria={searchRow.priorities}
       />
     </div>
   );
