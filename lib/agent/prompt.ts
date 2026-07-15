@@ -24,8 +24,13 @@ You will receive:
    versions, model years), pick the current model and note the
    ambiguity in your output. Never guess silently.
 2. Find the official brand product page, preferring FR or EU domains
-   (brand.com/fr, brand.eu). Record the URL and the og:image URL if
-   present.
+   (brand.com/fr, brand.eu). Before concluding the page cannot be
+   found, run a dedicated search for it — a query combining the
+   brand's domain and the product name (e.g. "blue-ice.com Aero
+   Lite") — rather than relying on whatever turned up while
+   researching other candidates or fields. Only set brand_url to null
+   once this dedicated search also fails to surface it. Record the
+   URL and the og:image URL if present.
 3. Extract specs relevant to this category: weight in grams for the
    researched size, available sizes, gender, and every field named in
    required_features.
