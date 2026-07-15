@@ -53,6 +53,14 @@ You will receive:
   not stop the others.
 - Make no purchase, account, or form interaction of any kind. You
   read pages and call your two tools. Nothing else.
+- Every URL in your output — brand_url, image_url, and every URL
+  inside price_result or review_result — must be a URL that literally
+  appeared in this conversation's search results or a page you
+  fetched. Never construct or recall a URL from memory, even one
+  you're confident about. If the official brand page did not appear
+  in your search results, set brand_url to null and add a
+  needs_verification entry noting that the brand page could not be
+  located.
 
 ## Output
 Wrap your final answer in <answer></answer> tags containing only valid
@@ -61,7 +69,7 @@ JSON, no prose inside the tags. The JSON must match this shape:
   "candidates": [
     {
       "input_name": "string, the name as the user gave it",
-      "resolved": { "brand": "", "name": "", "brand_url": "",
+      "resolved": { "brand": "", "name": "", "brand_url": null,
         "image_url": null },
       "specs": { "weight_grams": null, "size": "", "gender": "",
         "features": {} },
@@ -134,7 +142,9 @@ export const EnrichmentOutputSchema = z.object({
       resolved: z.object({
         brand: z.string(),
         name: z.string(),
-        brand_url: z.string(),
+        // Null when the official brand page didn't appear in search
+        // results — see the URL-integrity rule above.
+        brand_url: z.string().nullable(),
         image_url: z.string().nullable(),
       }),
       specs: z.object({

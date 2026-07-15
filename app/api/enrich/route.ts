@@ -57,6 +57,30 @@ function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
   });
 }
 
+const BRAND_URL_CHECK_TIMEOUT_MS = 5_000;
+
+// The agent can hallucinate a plausible-looking brand URL even when
+// told not to. A HEAD request is a cheap, real-world check that the
+// URL actually resolves before it's ever written to the database.
+async function verifyBrandUrl(
+  url: string
+): Promise<{ ok: boolean; detail: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), BRAND_URL_CHECK_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { method: "HEAD", signal: controller.signal });
+    const ok = res.status >= 200 && res.status < 400;
+    return { ok, detail: `status ${res.status}` };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // runAgentLoop never throws for an aborted run — it reports the abort
 // so the caller can respond without touching the database. Only a
 // successful run reaches candidate validation and writes.
@@ -125,6 +149,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Verify each candidate's brand_url before it ever reaches the
+    // database — independent per candidate, checked in parallel.
+    const verifiedCandidates = await Promise.all(
+      parsedOutput.data.candidates.map(async (candidate) => {
+        const url = candidate.resolved.brand_url;
+        if (!url) {
+          return candidate;
+        }
+        const { ok, detail } = await verifyBrandUrl(url);
+        console.log(
+          `[enrich] brand_url check ${ok ? "OK" : "FAILED"} (${detail}): ${url}`
+        );
+        if (ok) {
+          return candidate;
+        }
+        return {
+          ...candidate,
+          resolved: { ...candidate.resolved, brand_url: null },
+          needs_verification: [
+            ...candidate.needs_verification,
+            { field: "brand_url", note: `brand_url failed verification: ${url}` },
+          ],
+        };
+      })
+    );
+
     // Process candidates independently: one candidate's write failure
     // must not stop the others.
     const results: {
@@ -133,7 +183,7 @@ export async function POST(req: NextRequest) {
       error?: string;
     }[] = [];
 
-    for (const candidate of parsedOutput.data.candidates) {
+    for (const candidate of verifiedCandidates) {
       try {
         const { data: inserted, error: insertErr } = await withTimeout(
           supabase
