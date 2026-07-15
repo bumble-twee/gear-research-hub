@@ -55,19 +55,22 @@ export const aggregateReviewsTool = {
 export interface FindPricesResult {
   results: {
     retailer: string;
-    // Omitted for out-of-stock items; never a placeholder 0.
-    price?: number;
+    // Omitted or null for out-of-stock/unverified items; never a
+    // placeholder 0.
+    price?: number | null;
     currency: string;
     url: string;
     in_stock: boolean;
-    size_matched: boolean;
+    // Undefined means unknown, not a validation error.
+    size_matched?: boolean;
   }[];
   searched_at: string;
   domains_failed: string[];
 }
 
 export interface AggregateReviewsResult {
-  summary: string;
+  // Null when reviews_found is 0 — nothing to summarize.
+  summary: string | null;
   review_links: {
     site: string;
     url: string;

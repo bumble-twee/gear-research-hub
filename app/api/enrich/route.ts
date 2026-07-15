@@ -39,15 +39,22 @@ const MAX_TURNS = 15;
 const DB_OP_TIMEOUT_MS = 30_000;
 
 function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`${label} timed out after ${DB_OP_TIMEOUT_MS}ms`)),
-        DB_OP_TIMEOUT_MS
-      )
-    ),
-  ]);
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${DB_OP_TIMEOUT_MS}ms`)),
+      DB_OP_TIMEOUT_MS
+    );
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 // runAgentLoop never throws for an aborted run — it reports the abort
@@ -57,7 +64,7 @@ type AgentLoopResult =
   | { ok: true; output: unknown }
   | {
       ok: false;
-      reason: "max_iterations" | "api_error";
+      reason: "max_iterations" | "api_error" | "invalid_answer";
       error: string;
       completed: string[];
     };
@@ -71,7 +78,21 @@ export async function POST(req: NextRequest) {
 
     let output: unknown;
     if (mockMode) {
-      output = mockEnrichAnswer;
+      // Mirror a live run's shape: only the requested candidates come
+      // back, not the whole fixture regardless of what was asked for.
+      const fixtureCandidates = mockEnrichAnswer.candidates;
+      const matched = fixtureCandidates.filter((c) =>
+        candidateNames.includes(c.input_name)
+      );
+      const missing = candidateNames.filter(
+        (name: string) => !fixtureCandidates.some((c) => c.input_name === name)
+      );
+      if (missing.length > 0) {
+        console.warn(
+          `[enrich] MOCK MODE: requested candidate name(s) not present in fixture, skipping: ${missing.join(", ")}`
+        );
+      }
+      output = { ...mockEnrichAnswer, candidates: matched };
     } else {
       const loopResult = await runAgentLoop(req, searchId, candidateNames);
       if (!loopResult.ok) {
@@ -84,7 +105,7 @@ export async function POST(req: NextRequest) {
             error: loopResult.error,
             completed: loopResult.completed,
           },
-          { status: 502 }
+          { status: loopResult.reason === "invalid_answer" ? 500 : 502 }
         );
       }
       output = loopResult.output;
@@ -334,18 +355,35 @@ When calling aggregate_reviews, use these review domains: ${
     logAfterCall(turns, response);
   }
 
+  // Same pattern as find-prices: the LAST text block, not the first,
+  // since tool use may insert blocks (and preamble text) before the
+  // model's final answer.
   const textBlocks = response.content.filter((b) => b.type === "text");
   const textBlock = textBlocks[textBlocks.length - 1];
   const text = textBlock?.type === "text" ? textBlock.text : "";
 
-  // Prompt asks for raw JSON, no prose, but strip accidental code
-  // fences defensively before parsing.
-  const cleaned = text
-    .trim()
-    .replace(/^```(?:json)?\n?/, "")
-    .replace(/\n?```$/, "");
+  const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/);
+  if (!answerMatch) {
+    return {
+      ok: false,
+      reason: "invalid_answer",
+      error: `No <answer> tags found in the model's response. First 500 chars: ${text.slice(0, 500)}`,
+      completed,
+    };
+  }
 
-  return { ok: true, output: JSON.parse(cleaned) };
+  try {
+    return { ok: true, output: JSON.parse(answerMatch[1].trim()) };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "invalid_answer",
+      error: `Failed to parse JSON inside <answer> tags (${
+        error instanceof Error ? error.message : String(error)
+      }). First 500 chars of response: ${text.slice(0, 500)}`,
+      completed,
+    };
+  }
 }
 
 async function executeTool(req: NextRequest, name: string, input: unknown) {

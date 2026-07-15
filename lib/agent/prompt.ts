@@ -55,7 +55,8 @@ You will receive:
   read pages and call your two tools. Nothing else.
 
 ## Output
-Return only valid JSON matching this shape, no prose:
+Wrap your final answer in <answer></answer> tags containing only valid
+JSON, no prose inside the tags. The JSON must match this shape:
 {
   "candidates": [
     {
@@ -85,11 +86,15 @@ const FindPricesResultSchema = z.object({
   results: z.array(
     z.object({
       retailer: z.string(),
-      price: z.number().optional(),
+      // Absent means no verified price (e.g. out of stock); an
+      // explicit null is also accepted, per the prompt's "use null
+      // for unknown values" contract.
+      price: z.number().nullable().optional(),
       currency: z.string(),
       url: z.string(),
       in_stock: z.boolean(),
-      size_matched: z.boolean(),
+      // Optional: undefined means "unknown", not a validation error.
+      size_matched: z.boolean().optional(),
     })
   ),
   searched_at: z.string(),
@@ -97,7 +102,8 @@ const FindPricesResultSchema = z.object({
 });
 
 const AggregateReviewsResultSchema = z.object({
-  summary: z.string(),
+  // Null when reviews_found is 0 — nothing to summarize.
+  summary: z.string().nullable(),
   review_links: z.array(
     z.object({
       site: z.string(),
@@ -113,6 +119,14 @@ const AggregateReviewsResultSchema = z.object({
 // Validates the enrichment agent's final JSON against the shape
 // documented above. A run that fails this must be rejected wholesale,
 // not partially written.
+//
+// This schema and the ENRICHMENT_SYSTEM_PROMPT's "## Output" section
+// above define the same contract — the prompt tells the agent what
+// shape to produce (including using null for any value it can't
+// find), and this schema enforces it. They must change together: a
+// field loosened or tightened here without updating the prompt (or
+// vice versa) will desync validation from what the agent is actually
+// told to send.
 export const EnrichmentOutputSchema = z.object({
   candidates: z.array(
     z.object({
@@ -125,8 +139,8 @@ export const EnrichmentOutputSchema = z.object({
       }),
       specs: z.object({
         weight_grams: z.number().nullable(),
-        size: z.string(),
-        gender: z.string(),
+        size: z.string().nullable(),
+        gender: z.string().nullable(),
         features: z.record(z.string(), z.unknown()),
       }),
       requirement_violations: z.array(
