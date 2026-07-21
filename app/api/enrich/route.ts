@@ -18,9 +18,15 @@ import {
 import mockEnrichAnswer from "@/lib/fixtures/enrich-answer.json";
 import { isMockMode } from "@/lib/env";
 
+// Vercel function ceiling on the Hobby plan; the route can't run longer
+// than this regardless of what's still in flight.
+export const maxDuration = 300;
+
 // maxRetries: 0 and an explicit timeout so a stalled or failing call
 // surfaces immediately as a thrown error instead of retrying silently.
-const anthropic = new Anthropic({ maxRetries: 0, timeout: 300_000 });
+// Kept well under maxDuration so a single stuck call can't eat the
+// whole route budget on its own.
+const anthropic = new Anthropic({ maxRetries: 0, timeout: 120_000 });
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
