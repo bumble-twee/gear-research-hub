@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import { DeleteSearchButton } from "../../DeleteSearchButton";
 import { CandidateList } from "./CandidateList";
 import { LocalTime } from "./LocalTime";
 import { SEARCH_STATUS_STYLES, currencySymbol, ownedDuration } from "./format";
@@ -117,6 +118,7 @@ export default async function SearchDetailPage({
         ownedItem={ownedItem}
         triedCount={triedCount}
         totalCount={nonRejected.length}
+        candidateCount={candidateRows.length}
       />
       <RequirementsChips search={searchRow} />
 
@@ -138,11 +140,13 @@ function Header({
   ownedItem,
   triedCount,
   totalCount,
+  candidateCount,
 }: {
   search: SearchRow;
   ownedItem: OwnedItemRow | null;
   triedCount: number;
   totalCount: number;
+  candidateCount: number;
 }) {
   return (
     <div>
@@ -161,6 +165,13 @@ function Header({
         {triedCount} of {totalCount} tried
       </p>
       {ownedItem && <ReplacingLine ownedItem={ownedItem} />}
+      <div className="mt-3 flex justify-end border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <DeleteSearchButton
+          searchId={search.id}
+          title={search.title}
+          candidateCount={candidateCount}
+        />
+      </div>
     </div>
   );
 }

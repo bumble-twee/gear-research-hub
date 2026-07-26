@@ -84,6 +84,23 @@ export async function chooseCandidate(searchId: string, candidateId: string) {
   revalidatePath(pagePath(searchId));
 }
 
+// searches.chosen_candidate_id -> candidates(id) has no ON DELETE
+// clause (defaults to NO ACTION), so deleting a candidate still
+// referenced as its search's chosen one would otherwise fail with a
+// foreign key violation. Clear the dangling reference first. Price
+// and review snapshots cascade on their own (ON DELETE CASCADE).
+export async function deleteCandidate(searchId: string, candidateId: string) {
+  const { error: clearErr } = await supabase
+    .from("searches")
+    .update({ chosen_candidate_id: null })
+    .eq("chosen_candidate_id", candidateId);
+  if (clearErr) throw clearErr;
+
+  const { error } = await supabase.from("candidates").delete().eq("id", candidateId);
+  if (error) throw error;
+  revalidatePath(pagePath(searchId));
+}
+
 export async function logFit(
   searchId: string,
   candidateId: string,

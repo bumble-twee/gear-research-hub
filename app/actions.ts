@@ -40,3 +40,15 @@ export async function createSearch(formData: FormData) {
 
   redirect(`/searches/${data.id}`);
 }
+
+// Shared by the search detail header and the homepage list — deleting
+// cascades to candidates and, from there, to their price/review
+// snapshots at the database level (all ON DELETE CASCADE).
+// redirect("/") both takes you off a now-gone detail page and, when
+// called from the homepage itself, freshly re-renders that same list
+// without the deleted row.
+export async function deleteSearch(searchId: string) {
+  const { error } = await supabase.from("searches").delete().eq("id", searchId);
+  if (error) throw error;
+  redirect("/");
+}

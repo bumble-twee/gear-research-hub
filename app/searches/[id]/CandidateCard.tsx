@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CandidateStatusControls } from "./CandidateStatusControls";
+import { DeleteCandidateButton } from "./DeleteCandidateButton";
 import { FitLogForm } from "./FitLogForm";
 import { LocalTime } from "./LocalTime";
 import { RestoreButton } from "./RestoreButton";
@@ -45,6 +46,11 @@ export function CandidateCard({
           </span>
         )}
         <RestoreButton searchId={searchId} candidateId={candidate.id} />
+        <DeleteCandidateButton
+          searchId={searchId}
+          candidateId={candidate.id}
+          label={`${candidate.brand} ${candidate.name}`}
+        />
       </div>
     );
   }
@@ -206,6 +212,14 @@ export function CandidateCard({
           ))}
         </div>
       )}
+
+      <div className="mt-4 flex justify-end border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <DeleteCandidateButton
+          searchId={searchId}
+          candidateId={candidate.id}
+          label={`${candidate.brand} ${candidate.name}`}
+        />
+      </div>
     </div>
   );
 }

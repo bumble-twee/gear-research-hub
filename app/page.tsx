@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
+import { DeleteSearchButton } from "./DeleteSearchButton";
 import { NewSearchButton } from "./NewSearchButton";
 import { SEARCH_STATUS_STYLES } from "./searches/[id]/format";
 import type { SearchRow } from "./searches/[id]/types";
@@ -80,27 +81,29 @@ export default async function SearchesIndexPage() {
 
 function SearchCard({ search, stats }: { search: SearchRow; stats: CandidateStat }) {
   return (
-    <Link
-      href={`/searches/${search.id}`}
-      className="block rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-            {search.title}
-          </h2>
-          <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{search.category}</p>
+    <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700">
+      <Link href={`/searches/${search.id}`} className="block">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+              {search.title}
+            </h2>
+            <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{search.category}</p>
+          </div>
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${SEARCH_STATUS_STYLES[search.status]}`}
+          >
+            {search.status}
+          </span>
         </div>
-        <span
-          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${SEARCH_STATUS_STYLES[search.status]}`}
-        >
-          {search.status}
-        </span>
+        <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+          {stats.total} candidate{stats.total === 1 ? "" : "s"} · {stats.tried} of{" "}
+          {stats.nonRejected} tried
+        </p>
+      </Link>
+      <div className="mt-3 flex justify-end border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <DeleteSearchButton searchId={search.id} title={search.title} candidateCount={stats.total} />
       </div>
-      <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
-        {stats.total} candidate{stats.total === 1 ? "" : "s"} · {stats.tried} of{" "}
-        {stats.nonRejected} tried
-      </p>
-    </Link>
+    </div>
   );
 }
