@@ -1,6 +1,6 @@
-// Row shapes as they come back from Supabase for this page. Kept local
-// to this route rather than shared globally — nothing else reads these
-// yet.
+// Row shapes as they come back from Supabase. Originally scoped to
+// this route; the searches index page (app/page.tsx) now also imports
+// SearchRow directly from here rather than duplicating it.
 
 export type SearchStatus = "active" | "decided" | "abandoned";
 export type CandidateStatus = "considering" | "shortlisted" | "rejected" | "chosen";

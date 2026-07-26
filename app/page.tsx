@@ -1,65 +1,106 @@
-import Image from "next/image";
+import Link from "next/link";
+import { createClient } from "@supabase/supabase-js";
+import { NewSearchButton } from "./NewSearchButton";
+import { SEARCH_STATUS_STYLES } from "./searches/[id]/format";
+import type { SearchRow } from "./searches/[id]/types";
 
-export default function Home() {
+// Has no dynamic route params to force per-request rendering (unlike
+// /searches/[id]), so without this Next would statically prerender the
+// searches list once at build time and never show rows created after.
+export const dynamic = "force-dynamic";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY! // server-side only, never in client code
+);
+
+interface CandidateStat {
+  total: number;
+  nonRejected: number;
+  tried: number;
+}
+
+export default async function SearchesIndexPage() {
+  const { data: searches, error: searchesErr } = await supabase
+    .from("searches")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (searchesErr) throw searchesErr;
+
+  const searchRows = (searches ?? []) as SearchRow[];
+  const searchIds = searchRows.map((s) => s.id);
+
+  const statsBySearch = new Map<string, CandidateStat>();
+  if (searchIds.length > 0) {
+    const { data: candidates, error: candidatesErr } = await supabase
+      .from("candidates")
+      .select("search_id, status, fit_rating")
+      .in("search_id", searchIds);
+    if (candidatesErr) throw candidatesErr;
+
+    for (const c of candidates ?? []) {
+      const stat = statsBySearch.get(c.search_id) ?? {
+        total: 0,
+        nonRejected: 0,
+        tried: 0,
+      };
+      stat.total += 1;
+      if (c.status !== "rejected") {
+        stat.nonRejected += 1;
+        if (c.fit_rating !== null) stat.tried += 1;
+      }
+      statsBySearch.set(c.search_id, stat);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="mx-auto w-full max-w-3xl px-6 py-10">
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Searches</h1>
+        <NewSearchButton />
+      </div>
+
+      <div className="mt-6 flex flex-col gap-3">
+        {searchRows.map((search) => (
+          <SearchCard
+            key={search.id}
+            search={search}
+            stats={statsBySearch.get(search.id) ?? { total: 0, nonRejected: 0, tried: 0 }}
+          />
+        ))}
+        {searchRows.length === 0 && (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            No searches yet. Start one above.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        )}
+      </div>
     </div>
+  );
+}
+
+function SearchCard({ search, stats }: { search: SearchRow; stats: CandidateStat }) {
+  return (
+    <Link
+      href={`/searches/${search.id}`}
+      className="block rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+            {search.title}
+          </h2>
+          <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{search.category}</p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${SEARCH_STATUS_STYLES[search.status]}`}
+        >
+          {search.status}
+        </span>
+      </div>
+      <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+        {stats.total} candidate{stats.total === 1 ? "" : "s"} · {stats.tried} of{" "}
+        {stats.nonRejected} tried
+      </p>
+    </Link>
   );
 }
