@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { DeleteSearchButton } from "../../DeleteSearchButton";
@@ -120,6 +121,12 @@ export default async function SearchDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-10">
+      <Link
+        href="/"
+        className="mb-4 inline-block text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+      >
+        ← Back to searches
+      </Link>
       <Header
         search={searchRow}
         ownedItem={ownedItem}

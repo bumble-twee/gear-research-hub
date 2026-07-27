@@ -63,6 +63,7 @@ export function CandidateCard({
     try {
       const res = await fetch("/api/tools/find-prices", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brand: candidate.brand,
@@ -72,7 +73,10 @@ export function CandidateCard({
           retailer_domains: retailerDomains,
         }),
       });
-      if (!res.ok) throw new Error(`Price refresh failed (${res.status})`);
+      // Not JSON-parsed either way, but a non-ok response (e.g. a
+      // plain-text 401 from the Basic Auth proxy) still shouldn't be
+      // treated as success.
+      if (!res.ok) throw new Error(`Price refresh failed: ${res.status} ${res.statusText}`);
       router.refresh();
     } catch (err) {
       setPriceError(err instanceof Error ? err.message : String(err));
@@ -87,6 +91,7 @@ export function CandidateCard({
     try {
       const res = await fetch("/api/tools/aggregate-reviews", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brand: candidate.brand,
@@ -96,7 +101,10 @@ export function CandidateCard({
           focus_criteria: focusCriteria,
         }),
       });
-      if (!res.ok) throw new Error(`Review refresh failed (${res.status})`);
+      // Not JSON-parsed either way, but a non-ok response (e.g. a
+      // plain-text 401 from the Basic Auth proxy) still shouldn't be
+      // treated as success.
+      if (!res.ok) throw new Error(`Review refresh failed: ${res.status} ${res.statusText}`);
       router.refresh();
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : String(err));

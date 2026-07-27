@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+// Origin/Referer host, or null if the header is missing or unparseable.
+function hostFrom(headerValue: string | null): string | null {
+  if (!headerValue) return null;
+  try {
+    return new URL(headerValue).host;
+  } catch {
+    return null;
+  }
+}
+
 export function proxy(request: NextRequest) {
   const user = process.env.BASIC_AUTH_USER;
   const password = process.env.BASIC_AUTH_PASSWORD;
@@ -8,6 +18,26 @@ export function proxy(request: NextRequest) {
   // Unset in local dev: skip the check entirely.
   if (!user || !password) {
     return NextResponse.next();
+  }
+
+  // The frontend calls its own /api/* routes directly from the browser
+  // (e.g. the enrichment form's fetch to /api/enrich). Basic Auth
+  // credentials aren't reliably reattached to those requests, which
+  // surfaced as the API returning a plain-text 401 that the frontend
+  // then tried to parse as JSON. A request whose Origin or Referer host
+  // matches this deployment's own host can only have come from a page
+  // this proxy already served — trust it without a Basic Auth header.
+  // Direct external access to /api/* has no matching same-origin
+  // Origin/Referer to present, so it still falls through to the check
+  // below. Page routes are never given this bypass.
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    const deploymentHost = request.nextUrl.host;
+    const callerHost =
+      hostFrom(request.headers.get("origin")) ??
+      hostFrom(request.headers.get("referer"));
+    if (callerHost && callerHost === deploymentHost) {
+      return NextResponse.next();
+    }
   }
 
   const authHeader = request.headers.get("authorization");

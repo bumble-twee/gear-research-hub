@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { DeleteSearchButton } from "./DeleteSearchButton";
 import { NewSearchButton } from "./NewSearchButton";
+import { RefreshOnFocus } from "./RefreshOnFocus";
 import { SEARCH_STATUS_STYLES } from "./searches/[id]/format";
 import type { SearchRow } from "./searches/[id]/types";
 
@@ -56,6 +57,7 @@ export default async function SearchesIndexPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-10">
+      <RefreshOnFocus />
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Searches</h1>
         <NewSearchButton />

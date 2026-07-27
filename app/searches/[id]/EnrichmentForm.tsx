@@ -61,16 +61,20 @@ export function EnrichmentForm({ searchId }: { searchId: string }) {
     try {
       const res = await fetch("/api/enrich", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ searchId, candidateNames }),
       });
-      const data: EnrichResponse = await res.json();
 
-      if (!res.ok || data.status !== "completed") {
-        setError(data.error ?? `Enrichment request failed (${res.status})`);
-        setRunNotes(data.run_notes ?? []);
+      // A non-ok response isn't guaranteed to be JSON (e.g. the Basic
+      // Auth proxy returning a plain-text 401) — never call .json() on
+      // it blindly.
+      if (!res.ok) {
+        setError(`Enrichment request failed: ${res.status} ${res.statusText}`);
         return;
       }
+
+      const data: EnrichResponse = await res.json();
 
       setCandidateErrors(
         (data.candidates ?? [])
