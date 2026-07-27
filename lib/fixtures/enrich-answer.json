@@ -46,25 +46,6 @@
         ],
         "searched_at": "2026-07-13T08:06:10.435Z",
         "domains_failed": []
-      },
-      "review_result": {
-        "summary": "Best pick if minimizing rack weight is the priority — it's among the lightest screws in its class and suited to fast, high-volume alpine placements. Skip it for routes with sustained hard or rock-scraped ice, where the teeth dull faster than steel alternatives.",
-        "review_links": [
-          {
-            "site": "outdoorgearlab.com",
-            "url": "https://www.outdoorgearlab.com/reviews/climbing/ice-screw/blue-ice-aero-lite",
-            "rating": "8.0/10",
-            "key_takeaway": "Excellent weight-to-strength ratio for alpine racks; teeth dull faster than steel on hard ice."
-          },
-          {
-            "site": "blisterreview.com",
-            "url": "https://blisterreview.com/gear-reviews/blue-ice-aero-lite",
-            "rating": null,
-            "key_takeaway": "Aluminum tube holds up well across seasons of moderate ice but isn't the first choice for sustained hard-ice pitches."
-          }
-        ],
-        "reviews_found": 2,
-        "domains_failed": []
       }
     },
     {
@@ -117,25 +98,6 @@
           }
         ],
         "searched_at": "2026-07-13T08:06:10.435Z",
-        "domains_failed": []
-      },
-      "review_result": {
-        "summary": "Reviewers weighted toward technical ice climbing rate the Laser Speed Light highly for its Speed thread pattern, which starts a placement with a single hand motion and cranks noticeably faster than the Aero Lite on hard water ice. The tradeoff is weight and price: reviewers note it's heavier than pure alpine-rack screws and the folding hanger adds a moving part that needs occasional cleaning when it ices up. Teeth and tube durability get uniformly positive marks even after multiple seasons of repeated placements in hard, brittle ice.",
-        "review_links": [
-          {
-            "site": "outdoorgearlab.com",
-            "url": "https://www.outdoorgearlab.com/reviews/climbing/ice-screw/petzl-laser-speed-light",
-            "rating": "9.0/10",
-            "key_takeaway": "Fastest starting bite in its class; heavier than pure alpine-rack screws."
-          },
-          {
-            "site": "blisterreview.com",
-            "url": "https://blisterreview.com/gear-reviews/petzl-laser-speed-light",
-            "rating": null,
-            "key_takeaway": "Teeth hold an edge through repeated hard-ice placements with minimal wear."
-          }
-        ],
-        "reviews_found": 2,
         "domains_failed": []
       }
     }

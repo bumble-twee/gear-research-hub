@@ -26,32 +26,6 @@ export const findPricesTool = {
   },
 };
 
-export const aggregateReviewsTool = {
-  name: "aggregate_reviews",
-  description:
-    "Search preferred review sites for reviews of a specific product. Returns links and a synthesized summary.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      brand: { type: "string" },
-      item_name: { type: "string" },
-      review_domains: {
-        type: "array",
-        items: { type: "string" },
-        description:
-          "Domains from preferred_sites where site_type = 'review'",
-      },
-      focus_criteria: {
-        type: "array",
-        items: { type: "string" },
-        description:
-          "Optional. What to prioritize in the summary, from the search's priorities.",
-      },
-    },
-    required: ["brand", "item_name", "review_domains"],
-  },
-};
-
 export interface FindPricesResult {
   results: {
     retailer: string;

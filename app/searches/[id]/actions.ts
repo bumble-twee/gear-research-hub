@@ -137,6 +137,34 @@ export async function deleteCandidate(searchId: string, candidateId: string) {
   revalidatePath(pagePath(searchId));
 }
 
+// A user-provided brand_url is a signal the enrichment agent trusts:
+// see runAgentLoop in app/api/enrich/route.ts, which looks up any
+// existing candidate's brand_url and tells the agent to fetch it
+// directly instead of searching.
+export async function setBrandUrl(
+  searchId: string,
+  candidateId: string,
+  brandUrl: string | null
+) {
+  let normalized: string | null = null;
+  if (brandUrl && brandUrl.trim()) {
+    const trimmed = brandUrl.trim();
+    try {
+      new URL(trimmed);
+    } catch {
+      throw new Error("Enter a valid URL (including https://).");
+    }
+    normalized = trimmed;
+  }
+
+  const { error } = await supabase
+    .from("candidates")
+    .update({ brand_url: normalized, updated_at: new Date().toISOString() })
+    .eq("id", candidateId);
+  if (error) throw error;
+  revalidatePath(pagePath(searchId));
+}
+
 function cleanStringList(items: string[]): string[] {
   return items.map((item) => item.trim()).filter(Boolean);
 }

@@ -10,11 +10,8 @@ import type {
 } from "@anthropic-ai/sdk/resources/messages";
 import { createClient } from "@supabase/supabase-js";
 import { ENRICHMENT_SYSTEM_PROMPT, EnrichmentOutputSchema } from "@/lib/agent/prompt";
-import { findPricesTool, aggregateReviewsTool } from "@/lib/agent/tools";
-import {
-  writePriceSnapshotAndCache,
-  writeReviewSnapshot,
-} from "@/lib/db/writeSnapshotAndCache";
+import { findPricesTool } from "@/lib/agent/tools";
+import { writePriceSnapshotAndCache } from "@/lib/db/writeSnapshotAndCache";
 import mockEnrichAnswer from "@/lib/fixtures/enrich-answer.json";
 import { isMockMode } from "@/lib/env";
 import { normalizeRequiredFeatures } from "@/app/searches/[id]/format";
@@ -265,26 +262,19 @@ export async function POST(req: NextRequest) {
           candidateId = inserted.id;
         }
 
-        // Price and review writes are independent; neither blocks the other.
-        const [priceOutcome, reviewOutcome] = await Promise.allSettled([
-          withTimeout(
+        try {
+          await withTimeout(
             writePriceSnapshotAndCache(candidateId, candidate.price_result),
             `price write for "${candidate.input_name}"`
-          ),
-          withTimeout(
-            writeReviewSnapshot(candidateId, candidate.review_result),
-            `review write for "${candidate.input_name}"`
-          ),
-        ]);
-        const writeErrors = [priceOutcome, reviewOutcome]
-          .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-          .map((r) => String(r.reason));
-
-        results.push({
-          input_name: candidate.input_name,
-          candidateId,
-          ...(writeErrors.length > 0 && { error: writeErrors.join("; ") }),
-        });
+          );
+          results.push({ input_name: candidate.input_name, candidateId });
+        } catch (writeErr) {
+          results.push({
+            input_name: candidate.input_name,
+            candidateId,
+            error: String(writeErr),
+          });
+        }
       } catch (error) {
         console.error(`Candidate "${candidate.input_name}" failed:`, error);
         results.push({ input_name: candidate.input_name, error: String(error) });
@@ -348,19 +338,53 @@ async function runAgentLoop(
     }
   }
 
+  // Review domains aren't needed here anymore — the orchestrator no
+  // longer researches reviews itself; the search detail page builds
+  // "Find reviews" links from preferred_sites directly instead.
   const { data: sites, error: sitesErr } = await supabase
     .from("preferred_sites")
-    .select("site_type, domain, priority")
+    .select("domain")
+    .eq("site_type", "retailer")
     .eq("active", true)
     .order("priority", { ascending: true });
   if (sitesErr) throw sitesErr;
 
-  const retailerDomains = (sites ?? [])
-    .filter((s) => s.site_type === "retailer")
-    .map((s) => s.domain);
-  const reviewDomains = (sites ?? [])
-    .filter((s) => s.site_type === "review")
-    .map((s) => s.domain);
+  const retailerDomains = (sites ?? []).map((s) => s.domain);
+
+  // A brand_url already on a candidate in this search — entered
+  // manually, or set on an earlier run — is a trust signal for the
+  // prompt's "known brand_url" input: fetch it directly instead of
+  // searching. Matched against each requested name by input_name
+  // (agent-created rows) or "brand name" (manual rows have no
+  // input_name at all).
+  const { data: existingWithUrls, error: existingUrlsErr } = await supabase
+    .from("candidates")
+    .select("input_name, brand, name, brand_url")
+    .eq("search_id", searchId)
+    .not("brand_url", "is", null);
+  if (existingUrlsErr) throw existingUrlsErr;
+
+  function findKnownBrandUrl(candidateName: string): string | null {
+    const needle = candidateName.trim().toLowerCase();
+    const match = (existingWithUrls ?? []).find((c) => {
+      if (c.input_name && c.input_name.toLowerCase() === needle) return true;
+      return `${c.brand} ${c.name}`.toLowerCase() === needle;
+    });
+    return match?.brand_url ?? null;
+  }
+
+  const brandUrlHints = candidateNames
+    .map((name: string) => ({ name, url: findKnownBrandUrl(name) }))
+    .filter((h: { name: string; url: string | null }): h is { name: string; url: string } =>
+      Boolean(h.url)
+    );
+
+  const brandUrlHintsText =
+    brandUrlHints.length > 0
+      ? `\n\nKnown brand pages — fetch these directly instead of searching, and treat them as canonical:\n${brandUrlHints
+          .map((h) => `- ${h.name}: ${h.url}`)
+          .join("\n")}`
+      : "";
 
   const userMessage = `Research the following candidates for this search.
 
@@ -371,20 +395,17 @@ Priorities, in order: ${JSON.stringify(search.priorities)}
 Size to research: ${search.size ?? "not specified"}
 Gender: ${search.gender ?? "not specified"}
 
-Candidates to research: ${candidateNames.join(", ")}
+Candidates to research: ${candidateNames.join(", ")}${brandUrlHintsText}
 
 When calling find_prices, use these retailer domains: ${
     retailerDomains.join(", ") || "none configured"
-  }.
-When calling aggregate_reviews, use these review domains: ${
-    reviewDomains.join(", ") || "none configured"
   }.`;
 
   const params = {
     model: "claude-sonnet-4-6",
     max_tokens: 8192,
     system: ENRICHMENT_SYSTEM_PROMPT,
-    tools: [findPricesTool, aggregateReviewsTool],
+    tools: [findPricesTool],
   };
 
   let messages: MessageParam[] = [{ role: "user", content: userMessage }];
@@ -499,15 +520,19 @@ When calling aggregate_reviews, use these review domains: ${
 }
 
 async function executeTool(req: NextRequest, name: string, input: unknown) {
+  // find_prices is the only tool offered to the orchestrator (see
+  // `params.tools` in runAgentLoop), so this should never see anything
+  // else — but fail loudly instead of silently guessing a path if it
+  // ever does.
+  if (name !== "find_prices") {
+    throw new Error(`executeTool called with unknown tool name: ${name}`);
+  }
+
   // Candidates don't exist in the DB yet at this point in the run, so
-  // no candidateId is passed — these calls never trigger a snapshot
+  // no candidateId is passed — this call never triggers a snapshot
   // write. That happens later, once this route validates the full
   // output and inserts each candidate.
-  const path =
-    name === "find_prices"
-      ? "/api/tools/find-prices"
-      : "/api/tools/aggregate-reviews";
-  const res = await fetch(new URL(path, req.nextUrl.origin), {
+  const res = await fetch(new URL("/api/tools/find-prices", req.nextUrl.origin), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

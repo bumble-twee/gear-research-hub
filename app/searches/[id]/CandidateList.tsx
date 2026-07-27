@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { AddCandidatesPanel } from "./AddCandidatesPanel";
 import { CandidateCard } from "./CandidateCard";
-import type { CandidateRow, PriceSnapshotRow, ReviewSnapshotRow } from "./types";
+import type { CandidateRow, PriceSnapshotRow } from "./types";
 
 type SortKey = "fit" | "weight" | "price";
 type FilterKey = "all" | "considering" | "rejected";
@@ -58,18 +58,14 @@ export function CandidateList({
   searchId,
   candidates,
   priceByCandidate,
-  reviewByCandidate,
   retailerDomains,
   reviewDomains,
-  focusCriteria,
 }: {
   searchId: string;
   candidates: CandidateRow[];
   priceByCandidate: Record<string, PriceSnapshotRow | null>;
-  reviewByCandidate: Record<string, ReviewSnapshotRow | null>;
   retailerDomains: string[];
   reviewDomains: string[];
-  focusCriteria: string[];
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("fit");
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -89,7 +85,7 @@ export function CandidateList({
   }, [candidates, filter, sortKey]);
 
   return (
-    <div>
+    <div className="mt-6">
       {/* Reachable even on an empty search — never gated behind an
           existing candidate to react against. */}
       <AddCandidatesPanel searchId={searchId} />
@@ -140,10 +136,8 @@ export function CandidateList({
             searchId={searchId}
             candidate={candidate}
             priceSnapshot={priceByCandidate[candidate.id] ?? null}
-            reviewSnapshot={reviewByCandidate[candidate.id] ?? null}
             retailerDomains={retailerDomains}
             reviewDomains={reviewDomains}
-            focusCriteria={focusCriteria}
           />
         ))}
         {visible.length === 0 && (

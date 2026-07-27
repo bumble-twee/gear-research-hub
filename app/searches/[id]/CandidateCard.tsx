@@ -1,37 +1,39 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ExternalLinkIcon } from "@/app/icons";
+import { BrandUrlEditor } from "./BrandUrlEditor";
 import { CandidateStatusControls } from "./CandidateStatusControls";
 import { DeleteCandidateButton } from "./DeleteCandidateButton";
 import { FitLogForm } from "./FitLogForm";
 import { LocalTime } from "./LocalTime";
 import { RestoreButton } from "./RestoreButton";
-import { ReviewLinksExpander } from "./ReviewLinksExpander";
-import { formatPrice, humanizeAge, needsVerificationLabel, specsLine } from "./format";
-import type { CandidateRow, PriceSnapshotRow, ReviewSnapshotRow } from "./types";
+import {
+  buildReviewSearchUrl,
+  formatPrice,
+  humanizeAge,
+  needsVerificationLabel,
+  specsLine,
+} from "./format";
+import type { CandidateRow, PriceSnapshotRow } from "./types";
 
 export function CandidateCard({
   searchId,
   candidate,
   priceSnapshot,
-  reviewSnapshot,
   retailerDomains,
   reviewDomains,
-  focusCriteria,
 }: {
   searchId: string;
   candidate: CandidateRow;
   priceSnapshot: PriceSnapshotRow | null;
-  reviewSnapshot: ReviewSnapshotRow | null;
   retailerDomains: string[];
   reviewDomains: string[];
-  focusCriteria: string[];
 }) {
   const router = useRouter();
-  const [refreshing, setRefreshing] = useState<"price" | "reviews" | null>(null);
+  const [refreshingPrice, setRefreshingPrice] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
-  const [reviewError, setReviewError] = useState<string | null>(null);
 
   if (candidate.status === "rejected") {
     return (
@@ -59,7 +61,7 @@ export function CandidateCard({
 
   async function refreshPrice() {
     setPriceError(null);
-    setRefreshing("price");
+    setRefreshingPrice(true);
     try {
       const res = await fetch("/api/tools/find-prices", {
         method: "POST",
@@ -81,35 +83,7 @@ export function CandidateCard({
     } catch (err) {
       setPriceError(err instanceof Error ? err.message : String(err));
     } finally {
-      setRefreshing(null);
-    }
-  }
-
-  async function refreshReviews() {
-    setReviewError(null);
-    setRefreshing("reviews");
-    try {
-      const res = await fetch("/api/tools/aggregate-reviews", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brand: candidate.brand,
-          item_name: candidate.name,
-          candidateId: candidate.id,
-          review_domains: reviewDomains,
-          focus_criteria: focusCriteria,
-        }),
-      });
-      // Not JSON-parsed either way, but a non-ok response (e.g. a
-      // plain-text 401 from the Basic Auth proxy) still shouldn't be
-      // treated as success.
-      if (!res.ok) throw new Error(`Review refresh failed: ${res.status} ${res.statusText}`);
-      router.refresh();
-    } catch (err) {
-      setReviewError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setRefreshing(null);
+      setRefreshingPrice(false);
     }
   }
 
@@ -123,6 +97,13 @@ export function CandidateCard({
           {specs && (
             <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{specs}</p>
           )}
+          <div className="mt-1">
+            <BrandUrlEditor
+              searchId={searchId}
+              candidateId={candidate.id}
+              brandUrl={candidate.brand_url}
+            />
+          </div>
         </div>
         <CandidateStatusControls
           searchId={searchId}
@@ -167,7 +148,7 @@ export function CandidateCard({
           )}
           <RefreshButton
             label="Refresh price"
-            loading={refreshing === "price"}
+            loading={refreshingPrice}
             onClick={refreshPrice}
             className="mt-1.5"
           />
@@ -191,21 +172,25 @@ export function CandidateCard({
         </p>
       )}
 
-      <div className="mt-3">
-        {reviewSnapshot?.summary && <ReviewSummary summary={reviewSnapshot.summary} />}
-        {reviewSnapshot && reviewSnapshot.review_links.length > 0 && (
-          <ReviewLinksExpander links={reviewSnapshot.review_links} />
-        )}
-        <RefreshButton
-          label="Refresh reviews"
-          loading={refreshing === "reviews"}
-          onClick={refreshReviews}
-          className="mt-2"
-        />
-        {reviewError && (
-          <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{reviewError}</p>
-        )}
-      </div>
+      {reviewDomains.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Find reviews</p>
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+            {reviewDomains.map((domain) => (
+              <a
+                key={domain}
+                href={buildReviewSearchUrl(domain, candidate.brand, candidate.name)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
+              >
+                {domain}
+                <ExternalLinkIcon />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {candidate.needs_verification.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -270,37 +255,6 @@ function RefreshIcon() {
         clipRule="evenodd"
       />
     </svg>
-  );
-}
-
-function ReviewSummary({ summary }: { summary: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const [clamped, setClamped] = useState(false);
-  const ref = useRef<HTMLParagraphElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (el) setClamped(el.scrollHeight > el.clientHeight + 1);
-  }, [summary]);
-
-  return (
-    <div>
-      <p
-        ref={ref}
-        className={`text-sm text-zinc-600 dark:text-zinc-300 ${expanded ? "" : "line-clamp-3"}`}
-      >
-        {summary}
-      </p>
-      {clamped && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-        >
-          {expanded ? "Show less" : "Show more"}
-        </button>
-      )}
-    </div>
   );
 }
 

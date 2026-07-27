@@ -10,7 +10,9 @@ Steps 1-5 of PLAN.md are done:
 2. **Seeding** — `preferred_sites` seeded with real retailer and review domains.
 3. **find-prices** — `app/api/tools/find-prices/route.ts` implemented and tested.
 4. **writeSnapshotAndCache** — `lib/db/writeSnapshotAndCache.ts` exists.
-5. **aggregate-reviews** and the **enrich orchestrator loop** — `app/api/tools/aggregate-reviews/route.ts` and `app/api/enrich/route.ts` implemented: agent loop calls `find_prices`/`aggregate_reviews` as tools, output is zod-validated (whole run rejected on invalid JSON, no partial writes), candidates are written independently (one failing doesn't block the others). Tested end-to-end in mock mode; not yet run live.
+5. **aggregate-reviews** and the **enrich orchestrator loop** — `app/api/tools/aggregate-reviews/route.ts` and `app/api/enrich/route.ts` implemented: agent loop calls `find_prices` as a tool, output is zod-validated (whole run rejected on invalid JSON, no partial writes), candidates are written independently (one failing doesn't block the others). Tested end-to-end in mock mode; not yet run live.
+
+   Review enrichment was removed from this loop (see "Reviews" below) — the orchestrator only calls `find_prices` now. `aggregate-reviews/route.ts` and the `review_snapshots` table still exist but aren't called automatically by anything.
 
 Not yet built: the three UI views (searches list, search detail, new search form), CSV export.
 
@@ -21,7 +23,6 @@ Note: this project's actual file layout has no `src/` prefix — code lives unde
 - Agent returns JSON; only application code writes the database.
 - current_price fields are written ONLY by writeSnapshotAndCache,
   always together with a snapshot insert.
-- Price and review refresh are independent; neither blocks the other.
 - A requirement violation flags a candidate, never drops it (v1 is
   semi-manual; the user chose the candidate).
 - SUPABASE_SERVICE_ROLE_KEY stays server-side. Never in client code.
@@ -38,7 +39,24 @@ Note: this project's actual file layout has no `src/` prefix — code lives unde
 - Out-of-stock items still go into `results`, marked with `in_stock: false` — they are not dropped or filtered out.
 - Never write a placeholder-zero price. If a real price can't be found, omit it rather than fabricating `0`.
 
-Known gap: `aggregate-reviews/route.ts` still reads the FIRST text block (not the last) when extracting the answer, unlike find-prices. Same root cause, not yet fixed there.
+Known gap: `aggregate-reviews/route.ts` still reads the FIRST text block (not the last) when extracting the answer, unlike find-prices. Same root cause, not yet fixed there (moot for now since nothing calls it automatically — see "Reviews" below).
+
+## Reviews
+
+The enrichment orchestrator no longer researches reviews at all — no
+`aggregate_reviews` tool call, no `review_result` in its output shape,
+no `review_snapshots` write. Each candidate card instead renders a
+static "Find reviews" row: one link per active `preferred_sites` row
+with `site_type = 'review'`, each a Google site-search URL for that
+domain + the candidate's brand and name (`buildReviewSearchUrl` in
+`app/searches/[id]/format.ts`). No API call, no cost, no snapshot.
+
+`app/api/tools/aggregate-reviews/route.ts` and the `review_snapshots`
+table are untouched and still work if called directly — there's just
+no UI control left that calls them (the "Refresh reviews" button on
+each card was removed). Treat that route as available-but-dormant
+rather than deleted; a future feature could still write to
+`review_snapshots` through it.
 
 ## Mock mode
 

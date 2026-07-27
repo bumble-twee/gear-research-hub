@@ -43,7 +43,7 @@ export function AddCandidateForm({ searchId }: { searchId: string }) {
           <Field label="Size (optional)" name="size" />
           <Field label="Weight, grams (optional)" name="weight_grams" type="number" />
         </div>
-        <Field label="Product URL (optional)" name="url" type="url" />
+        <Field label="Brand URL (optional)" name="url" type="url" />
 
         <div className="mt-1">
           <button

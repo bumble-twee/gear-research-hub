@@ -12,13 +12,7 @@ import {
   normalizeRequiredFeatures,
   ownedDuration,
 } from "./format";
-import type {
-  CandidateRow,
-  OwnedItemRow,
-  PriceSnapshotRow,
-  ReviewSnapshotRow,
-  SearchRow,
-} from "./types";
+import type { CandidateRow, OwnedItemRow, PriceSnapshotRow, SearchRow } from "./types";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -78,39 +72,23 @@ export default async function SearchDetailPage({
   const candidateIds = candidateRows.map((c) => c.id);
 
   let priceSnapshots: PriceSnapshotRow[] = [];
-  let reviewSnapshots: ReviewSnapshotRow[] = [];
   if (candidateIds.length > 0) {
-    const [priceRes, reviewRes] = await Promise.all([
-      supabase
-        .from("price_snapshots")
-        .select("*")
-        .in("candidate_id", candidateIds)
-        .order("captured_at", { ascending: false }),
-      supabase
-        .from("review_snapshots")
-        .select("*")
-        .in("candidate_id", candidateIds)
-        .order("captured_at", { ascending: false }),
-    ]);
-    if (priceRes.error) throw priceRes.error;
-    if (reviewRes.error) throw reviewRes.error;
-    priceSnapshots = (priceRes.data ?? []) as PriceSnapshotRow[];
-    reviewSnapshots = (reviewRes.data ?? []) as ReviewSnapshotRow[];
+    const { data, error } = await supabase
+      .from("price_snapshots")
+      .select("*")
+      .in("candidate_id", candidateIds)
+      .order("captured_at", { ascending: false });
+    if (error) throw error;
+    priceSnapshots = (data ?? []) as PriceSnapshotRow[];
   }
 
   // Rows come back newest-first; keep only the first (latest) one seen
-  // per candidate. Snapshot lookups are plain objects (not Maps) since
-  // they cross the server/client boundary as props to CandidateList.
+  // per candidate. Snapshot lookup is a plain object (not a Map) since
+  // it crosses the server/client boundary as a prop to CandidateList.
   const priceByCandidate: Record<string, PriceSnapshotRow | null> = {};
   for (const snap of priceSnapshots) {
     if (!(snap.candidate_id in priceByCandidate)) {
       priceByCandidate[snap.candidate_id] = snap;
-    }
-  }
-  const reviewByCandidate: Record<string, ReviewSnapshotRow | null> = {};
-  for (const snap of reviewSnapshots) {
-    if (!(snap.candidate_id in reviewByCandidate)) {
-      reviewByCandidate[snap.candidate_id] = snap;
     }
   }
 
@@ -146,10 +124,8 @@ export default async function SearchDetailPage({
         searchId={id}
         candidates={candidateRows}
         priceByCandidate={priceByCandidate}
-        reviewByCandidate={reviewByCandidate}
         retailerDomains={retailerDomains}
         reviewDomains={reviewDomains}
-        focusCriteria={searchRow.priorities}
       />
     </div>
   );

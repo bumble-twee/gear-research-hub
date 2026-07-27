@@ -78,6 +78,15 @@ export function needsVerificationLabel(field: string): string {
   return NEEDS_VERIFICATION_LABELS[field] ?? `${field} unconfirmed`;
 }
 
+// Static "Find reviews" links, one per preferred review site — no API
+// call, no review_snapshots write. A Google site-search works
+// uniformly across every domain without needing each site's own
+// internal search URL pattern on file.
+export function buildReviewSearchUrl(domain: string, brand: string, name: string): string {
+  const query = `site:${domain} ${brand} ${name}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
 export const SEARCH_STATUS_STYLES: Record<string, string> = {
   active: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
   decided: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
