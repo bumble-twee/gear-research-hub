@@ -1,9 +1,6 @@
 "use server";
 
-// Server Action for the searches index page. Only creates a bare
-// search row — required_features/priorities stay at their schema
-// defaults ('{}' / '[]') until the search detail page's own editing
-// flow (not built yet) sets them.
+// Server Action for the searches index page.
 
 import { createClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
@@ -18,21 +15,31 @@ function optionalText(formData: FormData, key: string): string | null {
   return value || null;
 }
 
+function stringListField(formData: FormData, key: string): string[] {
+  return formData
+    .getAll(key)
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+}
+
 export async function createSearch(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
-  const category = String(formData.get("category") ?? "").trim();
 
   if (!title) throw new Error("Title is required.");
-  if (!category) throw new Error("Category is required.");
 
   const { data, error } = await supabase
     .from("searches")
     .insert({
       title,
-      category,
       reference_item: optionalText(formData, "reference_item"),
       size: optionalText(formData, "size"),
       gender: optionalText(formData, "gender"),
+      // Always set explicitly (never left to the column default) so
+      // every new row is array-shaped from the start — see
+      // normalizeRequiredFeatures in searches/[id]/format.ts for why
+      // that matters.
+      required_features: stringListField(formData, "required_features"),
+      priorities: stringListField(formData, "priorities"),
     })
     .select("id")
     .single();

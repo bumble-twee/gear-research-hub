@@ -3,7 +3,14 @@ import { createClient } from "@supabase/supabase-js";
 import { DeleteSearchButton } from "../../DeleteSearchButton";
 import { CandidateList } from "./CandidateList";
 import { LocalTime } from "./LocalTime";
-import { SEARCH_STATUS_STYLES, currencySymbol, ownedDuration } from "./format";
+import { PrioritiesEditor } from "./PrioritiesEditor";
+import { RequiredFeaturesEditor } from "./RequiredFeaturesEditor";
+import {
+  SEARCH_STATUS_STYLES,
+  currencySymbol,
+  normalizeRequiredFeatures,
+  ownedDuration,
+} from "./format";
 import type {
   CandidateRow,
   OwnedItemRow,
@@ -120,7 +127,13 @@ export default async function SearchDetailPage({
         totalCount={nonRejected.length}
         candidateCount={candidateRows.length}
       />
-      <RequirementsChips search={searchRow} />
+      <div className="mt-4 flex flex-col gap-4">
+        <RequiredFeaturesEditor
+          searchId={id}
+          features={normalizeRequiredFeatures(searchRow.required_features)}
+        />
+        <PrioritiesEditor searchId={id} priorities={searchRow.priorities ?? []} />
+      </div>
 
       <CandidateList
         searchId={id}
@@ -161,8 +174,8 @@ function Header({
         </span>
       </div>
       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-        {search.category} · Created <LocalTime iso={search.created_at} dateOnly /> ·{" "}
-        {triedCount} of {totalCount} tried
+        Created <LocalTime iso={search.created_at} dateOnly /> · {triedCount} of{" "}
+        {totalCount} tried
       </p>
       {ownedItem && <ReplacingLine ownedItem={ownedItem} />}
       <div className="mt-3 flex justify-end border-t border-zinc-100 pt-3 dark:border-zinc-800">
@@ -189,41 +202,5 @@ function ReplacingLine({ ownedItem }: { ownedItem: OwnedItemRow }) {
   }
   return (
     <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{parts.join(" · ")}</p>
-  );
-}
-
-function RequirementsChips({ search }: { search: SearchRow }) {
-  const featureEntries = Object.entries(search.required_features ?? {});
-  const priorities = search.priorities ?? [];
-
-  if (featureEntries.length === 0 && priorities.length === 0) return null;
-
-  return (
-    <div className="mt-4 flex flex-col gap-2">
-      {featureEntries.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {featureEntries.map(([key, value]) => (
-            <span
-              key={key}
-              className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-            >
-              {key}: {typeof value === "object" ? JSON.stringify(value) : String(value)}
-            </span>
-          ))}
-        </div>
-      )}
-      {priorities.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {priorities.map((priority, i) => (
-            <span
-              key={priority}
-              className="rounded-full border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
-            >
-              {i + 1}. {priority}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }

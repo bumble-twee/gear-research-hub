@@ -20,6 +20,42 @@ function pagePath(searchId: string) {
   return `/searches/${searchId}`;
 }
 
+function optionalText(formData: FormData, key: string): string | null {
+  const value = String(formData.get(key) ?? "").trim();
+  return value || null;
+}
+
+// The only manual-entry path into candidates — everything else comes
+// from the enrichment agent. Needed so an empty search isn't a dead
+// end: source "manual" distinguishes these from agent-researched rows.
+export async function addCandidate(searchId: string, formData: FormData) {
+  const brand = String(formData.get("brand") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!brand) throw new Error("Brand is required.");
+  if (!name) throw new Error("Name is required.");
+
+  const weightRaw = String(formData.get("weight_grams") ?? "").trim();
+  let weightGrams: number | null = null;
+  if (weightRaw) {
+    weightGrams = Number(weightRaw);
+    if (!Number.isFinite(weightGrams) || weightGrams < 0) {
+      throw new Error("Weight must be a positive number.");
+    }
+  }
+
+  const { error } = await supabase.from("candidates").insert({
+    search_id: searchId,
+    brand,
+    name,
+    size: optionalText(formData, "size"),
+    weight_grams: weightGrams,
+    brand_url: optionalText(formData, "url"),
+    source: "manual",
+  });
+  if (error) throw error;
+  revalidatePath(pagePath(searchId));
+}
+
 export async function setCandidateStatus(
   searchId: string,
   candidateId: string,
@@ -97,6 +133,31 @@ export async function deleteCandidate(searchId: string, candidateId: string) {
   if (clearErr) throw clearErr;
 
   const { error } = await supabase.from("candidates").delete().eq("id", candidateId);
+  if (error) throw error;
+  revalidatePath(pagePath(searchId));
+}
+
+function cleanStringList(items: string[]): string[] {
+  return items.map((item) => item.trim()).filter(Boolean);
+}
+
+export async function setRequiredFeatures(searchId: string, features: string[]) {
+  const { error } = await supabase
+    .from("searches")
+    .update({ required_features: cleanStringList(features) })
+    .eq("id", searchId);
+  if (error) throw error;
+  revalidatePath(pagePath(searchId));
+}
+
+// Order is significant — first is most important — so this always
+// replaces the whole array rather than patching one entry, keeping
+// the client's order authoritative.
+export async function setPriorities(searchId: string, priorities: string[]) {
+  const { error } = await supabase
+    .from("searches")
+    .update({ priorities: cleanStringList(priorities) })
+    .eq("id", searchId);
   if (error) throw error;
   revalidatePath(pagePath(searchId));
 }

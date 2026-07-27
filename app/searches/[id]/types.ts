@@ -21,10 +21,16 @@ export interface OwnedItemRow {
 export interface SearchRow {
   id: string;
   title: string;
-  category: string;
+  // Nullable: no longer collected by the new-search form or shown in
+  // the detail header; kept on the row for future use.
+  category: string | null;
   replaces_item_id: string | null;
   reference_item: string | null;
-  required_features: Record<string, unknown>;
+  // Freeform requirement strings (e.g. "dyneema construction"), not a
+  // field:value map. Older rows may still hold the schema default '{}'
+  // object from before this shape existed — see normalizeRequiredFeatures
+  // in ./format.ts, which every reader of this column goes through.
+  required_features: string[];
   priorities: string[];
   size: string | null;
   gender: string | null;

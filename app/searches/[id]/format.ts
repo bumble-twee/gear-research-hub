@@ -50,6 +50,16 @@ export function formatPrice(price: number, currency: string | null | undefined):
   return `${currencySymbol(currency)}${price.toFixed(2)}`;
 }
 
+// searches.required_features is jsonb with no shape constraint at the
+// DB level. Rows created before this column meant "list of freeform
+// requirement strings" still hold the old schema default '{}' (an
+// empty object). Every reader of this column goes through here so a
+// legacy row degrades to an empty list instead of throwing when code
+// expects an array.
+export function normalizeRequiredFeatures(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+}
+
 export function specsLine(size: string | null, weightGrams: number | null): string {
   const parts: string[] = [];
   if (size) parts.push(size);

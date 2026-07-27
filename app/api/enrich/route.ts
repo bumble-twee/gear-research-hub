@@ -17,6 +17,7 @@ import {
 } from "@/lib/db/writeSnapshotAndCache";
 import mockEnrichAnswer from "@/lib/fixtures/enrich-answer.json";
 import { isMockMode } from "@/lib/env";
+import { normalizeRequiredFeatures } from "@/app/searches/[id]/format";
 
 // Vercel function ceiling on the Hobby plan; the route can't run longer
 // than this regardless of what's still in flight.
@@ -364,9 +365,8 @@ async function runAgentLoop(
   const userMessage = `Research the following candidates for this search.
 
 Search: ${search.title}
-Category: ${search.category}
 Reference item: ${referenceItemText}
-Required features: ${JSON.stringify(search.required_features)}
+Required features: ${JSON.stringify(normalizeRequiredFeatures(search.required_features))}
 Priorities, in order: ${JSON.stringify(search.priorities)}
 Size to research: ${search.size ?? "not specified"}
 Gender: ${search.gender ?? "not specified"}

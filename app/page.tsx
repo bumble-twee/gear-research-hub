@@ -84,12 +84,9 @@ function SearchCard({ search, stats }: { search: SearchRow; stats: CandidateStat
     <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700">
       <Link href={`/searches/${search.id}`} className="block">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-              {search.title}
-            </h2>
-            <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{search.category}</p>
-          </div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+            {search.title}
+          </h2>
           <span
             className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${SEARCH_STATUS_STYLES[search.status]}`}
           >
