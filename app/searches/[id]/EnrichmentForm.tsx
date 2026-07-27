@@ -16,16 +16,17 @@ interface EnrichResponse {
   candidates?: EnrichCandidateResult[];
 }
 
-// Calls the existing /api/enrich route directly (a Route Handler, not
-// a Server Action) — same fetch-then-router.refresh() pattern already
-// used by the per-candidate "Refresh price"/"Refresh reviews" buttons
-// in CandidateCard.tsx. The request runs against the live Anthropic
-// API with web search unless MOCK_TOOLS is set, so it's the one
-// control on this page that spends real money — the warning below is
-// not decorative.
+// The other of two ways to get a candidate onto this search — agent-
+// driven research, via the existing /api/enrich route (a Route
+// Handler, not a Server Action; same fetch-then-router.refresh()
+// pattern already used by the per-candidate "Refresh price"/"Refresh
+// reviews" buttons in CandidateCard.tsx). Visibility is owned by the
+// parent AddCandidatesPanel. The request runs against the live
+// Anthropic API with web search unless MOCK_TOOLS is set, so it's the
+// one control on this page that spends real money — the subtitle
+// below is not decorative.
 export function EnrichmentForm({ searchId }: { searchId: string }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [names, setNames] = useState("");
   const [running, setRunning] = useState(false);
   const [runningCount, setRunningCount] = useState(0);
@@ -34,18 +35,6 @@ export function EnrichmentForm({ searchId }: { searchId: string }) {
   const [candidateErrors, setCandidateErrors] = useState<
     { input_name: string; error: string }[]
   >([]);
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-      >
-        Run enrichment
-      </button>
-    );
-  }
 
   const candidateNames = names
     .split("\n")
@@ -83,7 +72,6 @@ export function EnrichmentForm({ searchId }: { searchId: string }) {
       );
       setRunNotes(data.run_notes ?? []);
       setNames("");
-      setOpen(false);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -96,8 +84,15 @@ export function EnrichmentForm({ searchId }: { searchId: string }) {
 
   return (
     <div className="w-full rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+        Research candidates automatically
+      </h3>
+      <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+        Live enrichment calls the Anthropic API with web search for every
+        candidate listed and costs real API credits — it isn&apos;t free to run.
+      </p>
       <form
-        className="flex flex-col gap-3"
+        className="mt-3 flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
           if (candidateNames.length === 0) {
@@ -120,26 +115,14 @@ export function EnrichmentForm({ searchId }: { searchId: string }) {
             className="rounded border border-zinc-300 px-2 py-1.5 text-sm disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800"
           />
         </label>
-        <p className="text-xs text-amber-700 dark:text-amber-400">
-          Live enrichment calls the Anthropic API with web search for every
-          candidate listed and costs real API credits — it isn&apos;t free to run.
-        </p>
 
-        <div className="flex items-center gap-3">
+        <div>
           <button
             type="submit"
             disabled={running}
             className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
             {running ? "Running…" : "Start enrichment"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            disabled={running}
-            className="text-sm text-zinc-500 hover:underline disabled:opacity-50 dark:text-zinc-400"
-          >
-            Cancel
           </button>
         </div>
 

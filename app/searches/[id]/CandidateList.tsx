@@ -1,9 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AddCandidateForm } from "./AddCandidateForm";
+import { AddCandidatesPanel } from "./AddCandidatesPanel";
 import { CandidateCard } from "./CandidateCard";
-import { EnrichmentForm } from "./EnrichmentForm";
 import type { CandidateRow, PriceSnapshotRow, ReviewSnapshotRow } from "./types";
 
 type SortKey = "fit" | "weight" | "price";
@@ -92,12 +91,8 @@ export function CandidateList({
   return (
     <div>
       {/* Reachable even on an empty search — never gated behind an
-          existing candidate to react against. Stacked (not a row)
-          since either can expand into a full-width panel on its own. */}
-      <div className="flex flex-col items-start gap-3">
-        <AddCandidateForm searchId={searchId} />
-        <EnrichmentForm searchId={searchId} />
-      </div>
+          existing candidate to react against. */}
+      <AddCandidatesPanel searchId={searchId} />
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 text-sm dark:bg-zinc-800">

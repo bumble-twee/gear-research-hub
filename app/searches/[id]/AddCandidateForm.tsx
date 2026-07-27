@@ -3,38 +3,32 @@
 import { useState, useTransition } from "react";
 import { addCandidate } from "./actions";
 
-// Manual candidate entry — the only way into an empty search besides
-// running enrichment, so it has to stand on its own without any
-// existing candidates to react against.
+// One of two ways to get a candidate onto this search — manual entry,
+// free and instant. Visibility is owned by the parent AddCandidatesPanel;
+// this only manages its own field state and submission.
 export function AddCandidateForm({ searchId }: { searchId: string }) {
-  const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-      >
-        Add candidate
-      </button>
-    );
-  }
-
   return (
     <div className="w-full rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+        Add one manually
+      </h3>
+      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+        Enter details yourself. No web search, free.
+      </p>
       <form
-        className="flex flex-col gap-3"
+        className="mt-3 flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
-          const formData = new FormData(e.currentTarget);
+          const form = e.currentTarget;
+          const formData = new FormData(form);
           startTransition(async () => {
             try {
               await addCandidate(searchId, formData);
-              setOpen(false);
+              form.reset();
             } catch (err) {
               setError(err instanceof Error ? err.message : String(err));
             }
@@ -51,20 +45,13 @@ export function AddCandidateForm({ searchId }: { searchId: string }) {
         </div>
         <Field label="Product URL (optional)" name="url" type="url" />
 
-        <div className="mt-1 flex items-center gap-3">
+        <div className="mt-1">
           <button
             type="submit"
             disabled={isPending}
             className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
             {isPending ? "Adding…" : "Add candidate"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            className="text-sm text-zinc-500 hover:underline dark:text-zinc-400"
-          >
-            Cancel
           </button>
         </div>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
