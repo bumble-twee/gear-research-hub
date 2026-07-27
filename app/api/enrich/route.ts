@@ -509,8 +509,22 @@ async function executeTool(req: NextRequest, name: string, input: unknown) {
       : "/api/tools/aggregate-reviews";
   const res = await fetch(new URL(path, req.nextUrl.origin), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      // Lets this same-server call through the Basic Auth proxy (see
+      // proxy.ts) — a Node fetch has no Origin/Referer and can't hold
+      // a browser's Basic Auth credential, so without this it hits a
+      // plain-text 401 that isn't valid JSON.
+      "x-internal-secret": process.env.INTERNAL_API_SECRET ?? "",
+    },
     body: JSON.stringify(input),
   });
+  // Defense in depth: a non-ok response (e.g. this secret missing or
+  // wrong in this environment, so the proxy's 401 came through after
+  // all) isn't guaranteed to be JSON. Fail with a readable error
+  // instead of crashing on .json() parsing "Authentication required".
+  if (!res.ok) {
+    throw new Error(`${name} tool call failed: ${res.status} ${res.statusText}`);
+  }
   return res.json();
 }

@@ -20,17 +20,29 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // The frontend calls its own /api/* routes directly from the browser
-  // (e.g. the enrichment form's fetch to /api/enrich). Basic Auth
-  // credentials aren't reliably reattached to those requests, which
-  // surfaced as the API returning a plain-text 401 that the frontend
-  // then tried to parse as JSON. A request whose Origin or Referer host
-  // matches this deployment's own host can only have come from a page
-  // this proxy already served — trust it without a Basic Auth header.
-  // Direct external access to /api/* has no matching same-origin
-  // Origin/Referer to present, so it still falls through to the check
-  // below. Page routes are never given this bypass.
   if (request.nextUrl.pathname.startsWith("/api/")) {
+    // The enrich route's own server-side orchestrator calls its own
+    // /api/tools/find-prices and /api/tools/aggregate-reviews — a
+    // Node fetch with no browser, no Origin/Referer, and no way to
+    // hold a Basic Auth credential. Those calls were hitting the 401
+    // below and failing further upstream when the orchestrator tried
+    // to parse the plain-text auth page as JSON. A caller presenting
+    // this deployment's own secret can only be that same server
+    // process, so let it through before anything else is checked.
+    const internalSecret = process.env.INTERNAL_API_SECRET;
+    if (internalSecret && request.headers.get("x-internal-secret") === internalSecret) {
+      return NextResponse.next();
+    }
+
+    // The frontend also calls its own /api/* routes directly from the
+    // browser (e.g. the enrichment form's fetch to /api/enrich). Basic
+    // Auth credentials aren't reliably reattached to those requests
+    // either. A request whose Origin or Referer host matches this
+    // deployment's own host can only have come from a page this proxy
+    // already served — trust it without a Basic Auth header. Direct
+    // external access to /api/* has no matching same-origin
+    // Origin/Referer to present, so it still falls through to the
+    // check below. Page routes are never given either bypass.
     const deploymentHost = request.nextUrl.host;
     const callerHost =
       hostFrom(request.headers.get("origin")) ??
