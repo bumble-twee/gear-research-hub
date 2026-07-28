@@ -57,14 +57,12 @@ function matchesFilter(candidate: CandidateRow, filter: FilterKey): boolean {
 export function CandidateList({
   searchId,
   candidates,
-  priceByCandidate,
-  retailerDomains,
+  priceHistoryByCandidate,
   reviewDomains,
 }: {
   searchId: string;
   candidates: CandidateRow[];
-  priceByCandidate: Record<string, PriceSnapshotRow | null>;
-  retailerDomains: string[];
+  priceHistoryByCandidate: Record<string, PriceSnapshotRow[]>;
   reviewDomains: string[];
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("fit");
@@ -135,8 +133,7 @@ export function CandidateList({
             key={candidate.id}
             searchId={searchId}
             candidate={candidate}
-            priceSnapshot={priceByCandidate[candidate.id] ?? null}
-            retailerDomains={retailerDomains}
+            priceHistory={priceHistoryByCandidate[candidate.id] ?? []}
             reviewDomains={reviewDomains}
           />
         ))}

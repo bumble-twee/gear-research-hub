@@ -8,9 +8,16 @@ import { CandidateStatusControls } from "./CandidateStatusControls";
 import { DeleteCandidateButton } from "./DeleteCandidateButton";
 import { FitLogForm } from "./FitLogForm";
 import { LocalTime } from "./LocalTime";
+import { PriceSparkline } from "./PriceSparkline";
 import { RestoreButton } from "./RestoreButton";
+import { TargetPriceEditor } from "./TargetPriceEditor";
+import { TrackedUrlsEditor } from "./TrackedUrlsEditor";
 import {
+  PRICE_SIGNAL_LABELS,
+  PRICE_SIGNAL_STYLES,
+  PRICE_SIGNAL_TEXT_STYLES,
   buildReviewSearchUrl,
+  computePriceStats,
   formatPrice,
   humanizeAge,
   needsVerificationLabel,
@@ -21,14 +28,12 @@ import type { CandidateRow, PriceSnapshotRow } from "./types";
 export function CandidateCard({
   searchId,
   candidate,
-  priceSnapshot,
-  retailerDomains,
+  priceHistory,
   reviewDomains,
 }: {
   searchId: string;
   candidate: CandidateRow;
-  priceSnapshot: PriceSnapshotRow | null;
-  retailerDomains: string[];
+  priceHistory: PriceSnapshotRow[];
   reviewDomains: string[];
 }) {
   const router = useRouter();
@@ -58,22 +63,28 @@ export function CandidateCard({
   }
 
   const specs = specsLine(candidate.size, candidate.weight_grams);
+  // priceHistory is already ordered newest-first (matches the page's
+  // query), so [0] is the latest snapshot for this candidate, if any.
+  const latestSnapshot = priceHistory[0] ?? null;
+  // ?? not just the type's `| null`: guards against target_price being
+  // undefined at runtime if migration 006 hasn't been applied yet —
+  // select("*") silently omits a column that doesn't exist rather than
+  // erroring, so this can be undefined even though the type says null.
+  const targetPrice = candidate.target_price ?? null;
+  const priceStats = computePriceStats(priceHistory, targetPrice);
+  // ?? [] for the same reason as targetPrice above: undefined at
+  // runtime, not just absent, if migration 005 hasn't been applied yet.
+  const trackedUrls = candidate.tracked_urls ?? [];
 
   async function refreshPrice() {
     setPriceError(null);
     setRefreshingPrice(true);
     try {
-      const res = await fetch("/api/tools/find-prices", {
+      const res = await fetch("/api/track-prices", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brand: candidate.brand,
-          item_name: candidate.name,
-          size: candidate.size,
-          candidateId: candidate.id,
-          retailer_domains: retailerDomains,
-        }),
+        body: JSON.stringify({ candidateId: candidate.id }),
       });
       // Not JSON-parsed either way, but a non-ok response (e.g. a
       // plain-text 401 from the Basic Auth proxy) still shouldn't be
@@ -146,12 +157,14 @@ export function CandidateCard({
               </div>
             </>
           )}
-          <RefreshButton
-            label="Refresh price"
-            loading={refreshingPrice}
-            onClick={refreshPrice}
-            className="mt-1.5"
-          />
+          {trackedUrls.length > 0 && (
+            <RefreshButton
+              label="Refresh price"
+              loading={refreshingPrice}
+              onClick={refreshPrice}
+              className="mt-1.5"
+            />
+          )}
           {priceError && (
             <p className="mt-1.5 max-w-[12rem] text-xs text-red-600 dark:text-red-400">
               {priceError}
@@ -160,16 +173,54 @@ export function CandidateCard({
         </div>
       </div>
 
-      {priceSnapshot && priceSnapshot.domains_failed.length > 0 && (
+      <div className="mt-3">
+        <TrackedUrlsEditor
+          searchId={searchId}
+          candidateId={candidate.id}
+          trackedUrls={trackedUrls}
+        />
+      </div>
+
+      {latestSnapshot && latestSnapshot.domains_failed.length > 0 && (
         <p className="mt-3">
           <span
-            title={priceSnapshot.domains_failed.join(", ")}
+            title={latestSnapshot.domains_failed.join(", ")}
             className="inline-block rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
           >
-            {priceSnapshot.domains_failed.length} site
-            {priceSnapshot.domains_failed.length === 1 ? "" : "s"} not checked in last price run
+            {latestSnapshot.domains_failed.length} site
+            {latestSnapshot.domains_failed.length === 1 ? "" : "s"} not checked in last price run
           </span>
         </p>
+      )}
+
+      {priceStats && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md bg-zinc-50 px-3 py-2 dark:bg-zinc-800/50">
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${PRICE_SIGNAL_STYLES[priceStats.signal]}`}
+          >
+            {PRICE_SIGNAL_LABELS[priceStats.signal]}
+          </span>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Lowest {formatPrice(priceStats.lowest, priceStats.currency)}</span>
+            <span>Avg {formatPrice(priceStats.average, priceStats.currency)}</span>
+            <span>
+              {priceStats.vsLowestPct === 0
+                ? "At lowest"
+                : `+${priceStats.vsLowestPct.toFixed(0)}% vs lowest`}
+            </span>
+          </div>
+          <div className={PRICE_SIGNAL_TEXT_STYLES[priceStats.signal]}>
+            <PriceSparkline prices={priceStats.history} />
+          </div>
+          <div className="ml-auto">
+            <TargetPriceEditor
+              searchId={searchId}
+              candidateId={candidate.id}
+              targetPrice={targetPrice}
+              currency={priceStats.currency}
+            />
+          </div>
+        </div>
       )}
 
       {reviewDomains.length > 0 && (

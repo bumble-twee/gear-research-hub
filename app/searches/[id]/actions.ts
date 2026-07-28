@@ -120,6 +120,25 @@ export async function chooseCandidate(searchId: string, candidateId: string) {
   revalidatePath(pagePath(searchId));
 }
 
+// Feeds computePriceStats' "Good deal" signal (./format.ts) — an
+// optional user budget, not required for the signal to work at all.
+export async function setTargetPrice(
+  searchId: string,
+  candidateId: string,
+  targetPrice: number | null
+) {
+  if (targetPrice !== null && (!Number.isFinite(targetPrice) || targetPrice < 0)) {
+    throw new Error("Target price must be a positive number.");
+  }
+
+  const { error } = await supabase
+    .from("candidates")
+    .update({ target_price: targetPrice, updated_at: new Date().toISOString() })
+    .eq("id", candidateId);
+  if (error) throw error;
+  revalidatePath(pagePath(searchId));
+}
+
 // searches.chosen_candidate_id -> candidates(id) has no ON DELETE
 // clause (defaults to NO ACTION), so deleting a candidate still
 // referenced as its search's chosen one would otherwise fail with a
@@ -167,6 +186,28 @@ export async function setBrandUrl(
 
 function cleanStringList(items: string[]): string[] {
   return items.map((item) => item.trim()).filter(Boolean);
+}
+
+// Whole-array replace, same pattern as setRequiredFeatures/setPriorities.
+// Feeds /api/track-prices, which reads this column directly — a
+// candidate with no tracked_urls just gets a no-op "nothing to refresh"
+// response from that route rather than an error.
+export async function setTrackedUrls(searchId: string, candidateId: string, urls: string[]) {
+  const cleaned = cleanStringList(urls);
+  for (const url of cleaned) {
+    try {
+      new URL(url);
+    } catch {
+      throw new Error(`Not a valid URL: ${url}`);
+    }
+  }
+
+  const { error } = await supabase
+    .from("candidates")
+    .update({ tracked_urls: cleaned, updated_at: new Date().toISOString() })
+    .eq("id", candidateId);
+  if (error) throw error;
+  revalidatePath(pagePath(searchId));
 }
 
 export async function setRequiredFeatures(searchId: string, features: string[]) {

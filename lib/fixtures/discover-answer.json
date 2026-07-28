@@ -1,0 +1,42 @@
+{
+  "candidates": [
+    {
+      "brand": "Black Diamond",
+      "product_line_name": "Cirque",
+      "why_it_fits": "Ski-specific pack with A-frame and diagonal carry plus a dedicated avalanche kit pocket, matching the required avalanche kit pouch and this search's low-weight priority relative to other touring packs its size.",
+      "how_it_falls_short": "Runs slightly heavier than the most weight-focused touring packs in its class, a tradeoff for its more structured back panel.",
+      "approximate_capacity_or_size": "35L (nearest confirmed variant to the ~30L target; also sold in 22L and 45L)"
+    },
+    {
+      "brand": "Blue Ice",
+      "product_line_name": "Dan",
+      "why_it_fits": "Purpose-built ski mountaineering pack with a dedicated avalanche gear compartment and a minimalist, lightweight build that lines up well with a low-weight priority.",
+      "how_it_falls_short": "Fewer external attachment points than more touring-oriented competitors, so bulkier overnight loads are less comfortable to carry.",
+      "approximate_capacity_or_size": "30L (matches the target directly)"
+    },
+    {
+      "brand": "Osprey",
+      "product_line_name": "Soelden",
+      "why_it_fits": "Dedicated avalanche safety compartment and a ski-carry system aimed squarely at touring use, from a brand with strong EU customer service and repair support.",
+      "how_it_falls_short": "Heavier than the more minimalist packs on this list, since it carries more organizational features and structure.",
+      "approximate_capacity_or_size": "32L (nearest confirmed variant to the ~30L target; also sold in 22L and 42L)"
+    },
+    {
+      "brand": "Mammut",
+      "product_line_name": "Alyeska",
+      "why_it_fits": "Touring-focused pack with an avalanche kit pocket and a relatively low weight for its category, from a brand with established EU service and warranty support.",
+      "how_it_falls_short": "Couldn't confirm the specific back-panel ventilation setup matches every reviewer's comfort expectations for long skin tracks — worth trying on before buying.",
+      "approximate_capacity_or_size": "30L (matches the target directly; also sold in 20L)"
+    },
+    {
+      "brand": "Dynafit",
+      "product_line_name": "Speed",
+      "why_it_fits": "Purpose-built for fast ski touring with a low weight and a diagonal ski carry, aligning closely with a low-weight-first priority.",
+      "how_it_falls_short": "Minimalist design means less structure and fewer pockets than more organization-focused touring packs, which can matter for longer days.",
+      "approximate_capacity_or_size": "28L (nearest confirmed variant to the ~30L target; also sold in 20L)"
+    }
+  ],
+  "run_notes": [
+    "Mammut Alyeska's back-panel ventilation design could not be fully confirmed against current reviews — flagged in how_it_falls_short rather than treated as certain."
+  ]
+}

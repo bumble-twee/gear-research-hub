@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { AddCandidateForm } from "./AddCandidateForm";
-import { EnrichmentForm } from "./EnrichmentForm";
+import { DiscoveryForm } from "./DiscoveryForm";
 
 // Two genuinely different ways to get a candidate onto this search —
-// manual entry (free, instant, no research) vs. agent-driven
-// enrichment (costs API credits, does the research for you). They
-// stay separate flows; this only collapses both behind one toggle so
-// the default view isn't two open forms.
+// manual entry (free, instant, for a candidate you found yourself) vs.
+// agent-driven discovery (costs API credits, proposes leads from the
+// search's own requirements — you add tracked URLs to a lead
+// afterward). They stay separate flows; this only collapses both
+// behind one toggle so the default view isn't two open forms.
 export function AddCandidatesPanel({ searchId }: { searchId: string }) {
   const [open, setOpen] = useState(false);
 
@@ -25,7 +26,7 @@ export function AddCandidatesPanel({ searchId }: { searchId: string }) {
       {open && (
         <div className="mt-3 flex flex-col gap-4">
           <AddCandidateForm searchId={searchId} />
-          <EnrichmentForm searchId={searchId} />
+          <DiscoveryForm searchId={searchId} />
         </div>
       )}
     </div>

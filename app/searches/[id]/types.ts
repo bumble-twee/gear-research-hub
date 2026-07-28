@@ -70,6 +70,13 @@ export interface CandidateRow {
   current_price_retailer: string | null;
   current_price_url: string | null;
   price_updated_at: string | null;
+  // Optional user-set budget, feeds the price-history "Good deal"
+  // signal. See supabase/migrations/006_add_target_price.sql.
+  target_price: number | null;
+  // Populated later, by a future feature, once the user chases a
+  // discovery-agent lead down — always empty on insert. See
+  // supabase/migrations/005_add_tracked_urls.sql and app/api/discover.
+  tracked_urls: string[];
   created_at: string;
   updated_at: string;
 }

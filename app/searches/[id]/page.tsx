@@ -54,19 +54,15 @@ export default async function SearchDetailPage({
         : Promise.resolve(null),
       supabase
         .from("preferred_sites")
-        .select("site_type, domain, priority")
+        .select("domain, priority")
         .eq("active", true)
+        .eq("site_type", "review")
         .order("priority", { ascending: true }),
     ]);
   if (candidatesErr) throw candidatesErr;
   if (sitesErr) throw sitesErr;
 
-  const retailerDomains = (sites ?? [])
-    .filter((s) => s.site_type === "retailer")
-    .map((s) => s.domain);
-  const reviewDomains = (sites ?? [])
-    .filter((s) => s.site_type === "review")
-    .map((s) => s.domain);
+  const reviewDomains = (sites ?? []).map((s) => s.domain);
 
   const candidateRows = (candidates ?? []) as CandidateRow[];
   const candidateIds = candidateRows.map((c) => c.id);
@@ -82,14 +78,13 @@ export default async function SearchDetailPage({
     priceSnapshots = (data ?? []) as PriceSnapshotRow[];
   }
 
-  // Rows come back newest-first; keep only the first (latest) one seen
-  // per candidate. Snapshot lookup is a plain object (not a Map) since
-  // it crosses the server/client boundary as a prop to CandidateList.
-  const priceByCandidate: Record<string, PriceSnapshotRow | null> = {};
+  // Full history per candidate, newest-first (matches the query
+  // order) — computePriceStats needs the whole run, not just the
+  // latest snapshot. Grouped into a plain object (not a Map) since it
+  // crosses the server/client boundary as a prop to CandidateList.
+  const priceHistoryByCandidate: Record<string, PriceSnapshotRow[]> = {};
   for (const snap of priceSnapshots) {
-    if (!(snap.candidate_id in priceByCandidate)) {
-      priceByCandidate[snap.candidate_id] = snap;
-    }
+    (priceHistoryByCandidate[snap.candidate_id] ??= []).push(snap);
   }
 
   // "Tried" covers non-rejected candidates that have been fitted at
@@ -123,8 +118,7 @@ export default async function SearchDetailPage({
       <CandidateList
         searchId={id}
         candidates={candidateRows}
-        priceByCandidate={priceByCandidate}
-        retailerDomains={retailerDomains}
+        priceHistoryByCandidate={priceHistoryByCandidate}
         reviewDomains={reviewDomains}
       />
     </div>

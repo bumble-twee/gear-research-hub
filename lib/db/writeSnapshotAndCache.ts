@@ -1,8 +1,18 @@
 // THE guardrail. The current_price fields on candidates are a cache
 // of the latest price_snapshot. They must never drift apart, so this
-// is the ONLY function in the codebase allowed to write either.
-// Same rule applies to review snapshots (no cache there, but kept
-// here so all snapshot writes go through one door).
+// is the ONLY file allowed to write either. Same rule applies to
+// review snapshots (no cache there, but kept here so all snapshot
+// writes go through one door).
+//
+// Two price-writing shapes live here, for two different callers:
+// - writePriceSnapshotAndCache: one row per call, summarizing the
+//   cheapest in-stock result across a batch of retailer domains
+//   (find_prices' shape — searching multiple sites for one product).
+// - writeTrackedPriceSnapshotsAndCache: one row per URL, for
+//   /api/track-prices — the user is tracking specific product pages
+//   directly, so each URL's own price history is worth keeping, not
+//   just the cheapest-of-the-run. Still updates the cache exactly
+//   once, to the true minimum across all of them.
 
 import { createClient } from "@supabase/supabase-js";
 import type { FindPricesResult, AggregateReviewsResult } from "../agent/tools";
@@ -52,6 +62,81 @@ export async function writePriceSnapshotAndCache(
         current_price_retailer: cheapest.retailer,
         current_price_url: cheapest.url,
         price_updated_at: result.searched_at,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", candidateId);
+    if (cacheErr) throw cacheErr;
+  }
+}
+
+export interface TrackedUrlResult {
+  url: string;
+  retailer: string;
+  price: number | null;
+  currency: string;
+  in_stock: boolean | null;
+}
+
+// One row per successfully-parsed URL (append-only price history per
+// tracked page), one shared domains_failed list across all of them
+// (the URLs that couldn't be parsed this run), and a single cache
+// update to the true cheapest in-stock price across every URL —
+// never just whichever URL happened to be processed last.
+export async function writeTrackedPriceSnapshotsAndCache(
+  candidateId: string,
+  results: TrackedUrlResult[],
+  domainsFailed: string[],
+  capturedAt: string
+) {
+  if (results.length > 0) {
+    const { error: insertErr } = await supabase.from("price_snapshots").insert(
+      results.map((r) => ({
+        candidate_id: candidateId,
+        price: r.price,
+        currency: r.currency,
+        retailer: r.retailer,
+        url: r.url,
+        in_stock: r.in_stock,
+        size_matched: null,
+        domains_failed: domainsFailed,
+        captured_at: capturedAt,
+      }))
+    );
+    if (insertErr) throw insertErr;
+  } else if (domainsFailed.length > 0) {
+    // Every tracked URL failed to parse this run — still record that,
+    // mirroring writePriceSnapshotAndCache's none_found placeholder
+    // for a batch where nothing usable came back.
+    const { error: insertErr } = await supabase.from("price_snapshots").insert({
+      candidate_id: candidateId,
+      price: null,
+      currency: "EUR",
+      retailer: "none_found",
+      url: null,
+      in_stock: null,
+      size_matched: null,
+      domains_failed: domainsFailed,
+      captured_at: capturedAt,
+    });
+    if (insertErr) throw insertErr;
+  }
+
+  const priced = results.filter(
+    (r): r is TrackedUrlResult & { price: number } =>
+      r.in_stock === true && typeof r.price === "number"
+  );
+  const cheapest =
+    priced.length > 0 ? priced.reduce((min, r) => (r.price < min.price ? r : min)) : null;
+
+  if (cheapest) {
+    const { error: cacheErr } = await supabase
+      .from("candidates")
+      .update({
+        current_price: cheapest.price,
+        current_price_currency: cheapest.currency,
+        current_price_retailer: cheapest.retailer,
+        current_price_url: cheapest.url,
+        price_updated_at: capturedAt,
         updated_at: new Date().toISOString(),
       })
       .eq("id", candidateId);

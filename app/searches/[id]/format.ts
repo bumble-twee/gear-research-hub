@@ -2,6 +2,8 @@
 // page and CandidateCard. No timezone-sensitive logic lives here — see
 // LocalTime.tsx for anything that must render in the browser's zone.
 
+import type { PriceSnapshotRow } from "./types";
+
 export function humanizeAge(iso: string): string {
   const diffMs = Math.max(0, Date.now() - new Date(iso).getTime());
   const minute = 60_000;
@@ -86,6 +88,90 @@ export function buildReviewSearchUrl(domain: string, brand: string, name: string
   const query = `site:${domain} ${brand} ${name}`;
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
+
+export type PriceSignal = "good_deal" | "typical" | "wait";
+
+export interface PriceStats {
+  current: number;
+  currency: string;
+  lowest: number;
+  average: number;
+  // 0 when current equals the lowest ever seen; positive otherwise.
+  vsLowestPct: number;
+  signal: PriceSignal;
+  // Chronological (oldest first) priced values, for the sparkline.
+  history: number[];
+}
+
+// Within this of the lowest ever seen still counts as "at/near the
+// lowest" for the good-deal signal — a hand-picked, documented
+// threshold, not a fitted one.
+const NEAR_LOWEST_PCT = 5;
+
+// Straight arithmetic over price_snapshots — no LLM judgment anywhere
+// in this function. `history` must be sorted newest-first (matches
+// the query order already used elsewhere on this page); returns null
+// when there's no priced snapshot to compute from at all.
+export function computePriceStats(
+  history: PriceSnapshotRow[],
+  targetPrice: number | null
+): PriceStats | null {
+  const priced = history.filter(
+    (s): s is PriceSnapshotRow & { price: number } => typeof s.price === "number"
+  );
+  if (priced.length === 0) return null;
+
+  const current = priced[0].price;
+  const currency = priced[0].currency;
+  const lowest = Math.min(...priced.map((s) => s.price));
+  const average = priced.reduce((sum, s) => sum + s.price, 0) / priced.length;
+  const vsLowestPct = lowest > 0 ? ((current - lowest) / lowest) * 100 : 0;
+
+  const isNearLowest = vsLowestPct <= NEAR_LOWEST_PCT;
+  const isAtOrBelowTarget = targetPrice !== null && current <= targetPrice;
+  const isAboveAverage = current > average;
+
+  let signal: PriceSignal;
+  if (isNearLowest || isAtOrBelowTarget) {
+    signal = "good_deal";
+  } else if (isAboveAverage) {
+    signal = "wait";
+  } else {
+    signal = "typical";
+  }
+
+  return {
+    current,
+    currency,
+    lowest,
+    average,
+    vsLowestPct,
+    signal,
+    // Oldest first for a left-to-right sparkline.
+    history: [...priced].reverse().map((s) => s.price),
+  };
+}
+
+export const PRICE_SIGNAL_LABELS: Record<PriceSignal, string> = {
+  good_deal: "Good deal",
+  typical: "Typical",
+  wait: "Wait",
+};
+
+// Text-only variant (both light/dark), for coloring the sparkline via
+// currentColor — kept separate from the badge background above rather
+// than extracted from it at render time.
+export const PRICE_SIGNAL_TEXT_STYLES: Record<PriceSignal, string> = {
+  good_deal: "text-green-700 dark:text-green-400",
+  typical: "text-zinc-400 dark:text-zinc-500",
+  wait: "text-amber-700 dark:text-amber-400",
+};
+
+export const PRICE_SIGNAL_STYLES: Record<PriceSignal, string> = {
+  good_deal: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+  typical: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  wait: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+};
 
 export const SEARCH_STATUS_STYLES: Record<string, string> = {
   active: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
